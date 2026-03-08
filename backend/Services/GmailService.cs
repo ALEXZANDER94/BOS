@@ -23,15 +23,17 @@ public interface IGmailService
 
 public class GmailService : IGmailService
 {
-    private readonly AppDbContext       _db;
-    private readonly IConfiguration    _config;
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly AppDbContext        _db;
+    private readonly IConfiguration     _config;
+    private readonly IHttpClientFactory  _httpClientFactory;
+    private readonly ILogger<GmailService> _logger;
 
-    public GmailService(AppDbContext db, IConfiguration config, IHttpClientFactory httpClientFactory)
+    public GmailService(AppDbContext db, IConfiguration config, IHttpClientFactory httpClientFactory, ILogger<GmailService> logger)
     {
         _db                = db;
         _config            = config;
         _httpClientFactory = httpClientFactory;
+        _logger            = logger;
     }
 
     // ── Public interface ──────────────────────────────────────────────────────
@@ -119,48 +121,97 @@ public class GmailService : IGmailService
 
     public async Task<IReadOnlyList<string>> GetForwardingAddressesAsync(string userEmail)
     {
-        var keyPath = _config["Google:ServiceAccountKeyPath"];
+        var keyPath    = _config["Google:ServiceAccountKeyPath"];
+        var adminEmail = _config["Google:ServiceAccountAdminEmail"];
+
         if (string.IsNullOrWhiteSpace(keyPath) || !File.Exists(keyPath))
+        {
+            _logger.LogWarning("Aliases: service account key not configured or file not found at '{Path}'.", keyPath);
             return [];
+        }
+        if (string.IsNullOrWhiteSpace(adminEmail))
+        {
+            _logger.LogWarning("Aliases: Google:ServiceAccountAdminEmail is not configured.");
+            return [];
+        }
 
         try
         {
 #pragma warning disable CS0618 // FromFile is deprecated in favour of CredentialFactory, but safe here
             // because keyPath is sourced exclusively from server configuration, never from user input.
+            // The Directory API requires admin-level access, so we impersonate the configured
+            // admin account rather than the logged-in user.
             var credential = GoogleCredential
                 .FromFile(keyPath)
-                .CreateScoped("https://www.googleapis.com/auth/admin.directory.user.alias.readonly")
-                .CreateWithUser(userEmail);
+                .CreateScoped(
+                    "https://www.googleapis.com/auth/admin.directory.group.readonly",
+                    "https://www.googleapis.com/auth/admin.directory.user.alias.readonly")
+                .CreateWithUser(adminEmail);
 #pragma warning restore CS0618
 
             // UnderlyingCredential is a ServiceAccountCredential when loaded from a key file
             if (credential.UnderlyingCredential is not ServiceAccountCredential saCred)
+            {
+                _logger.LogWarning("Aliases: credential is not a ServiceAccountCredential.");
                 return [];
+            }
 
             var accessToken = await saCred.GetAccessTokenForRequestAsync();
+            var http        = _httpClientFactory.CreateClient();
+            var results     = new List<string>();
 
-            var http = _httpClientFactory.CreateClient();
-            using var req = new HttpRequestMessage(
+            // Fetch group addresses the user belongs to
+            using var groupReq = new HttpRequestMessage(
                 HttpMethod.Get,
-                $"https://admin.googleapis.com/admin/directory/v1/users/{Uri.EscapeDataString(userEmail)}/aliases");
-            req.Headers.Authorization =
+                $"https://admin.googleapis.com/admin/directory/v1/groups?userKey={Uri.EscapeDataString(userEmail)}");
+            groupReq.Headers.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
-            var resp = await http.SendAsync(req);
-            if (!resp.IsSuccessStatusCode)
-                return [];
+            var groupResp = await http.SendAsync(groupReq);
+            if (groupResp.IsSuccessStatusCode)
+            {
+                using var json = JsonDocument.Parse(await groupResp.Content.ReadAsStringAsync());
+                if (json.RootElement.TryGetProperty("groups", out var groupsEl))
+                    results.AddRange(groupsEl.EnumerateArray()
+                        .Select(g => g.TryGetProperty("email", out var v) ? v.GetString() : null)
+                        .Where(e => !string.IsNullOrWhiteSpace(e))!);
+                _logger.LogInformation("Aliases: groups call succeeded, found {Count} groups for {User}.", results.Count, userEmail);
+            }
+            else
+            {
+                var body = await groupResp.Content.ReadAsStringAsync();
+                _logger.LogWarning("Aliases: groups call failed {Status} for {User}. Response: {Body}", (int)groupResp.StatusCode, userEmail, body);
+            }
 
-            using var json = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
-            if (!json.RootElement.TryGetProperty("aliases", out var aliasesEl))
-                return [];
+            // Fetch user-level aliases
+            using var aliasReq = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"https://admin.googleapis.com/admin/directory/v1/users/{Uri.EscapeDataString(userEmail)}/aliases");
+            aliasReq.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
-            return aliasesEl.EnumerateArray()
-                .Select(a => a.TryGetProperty("alias", out var v) ? v.GetString() : null)
-                .Where(a => !string.IsNullOrWhiteSpace(a))
-                .ToList()!;
+            var aliasResp   = await http.SendAsync(aliasReq);
+            var beforeCount = results.Count;
+            if (aliasResp.IsSuccessStatusCode)
+            {
+                using var json = JsonDocument.Parse(await aliasResp.Content.ReadAsStringAsync());
+                if (json.RootElement.TryGetProperty("aliases", out var aliasesEl))
+                    results.AddRange(aliasesEl.EnumerateArray()
+                        .Select(a => a.TryGetProperty("alias", out var v) ? v.GetString() : null)
+                        .Where(a => !string.IsNullOrWhiteSpace(a))!);
+                _logger.LogInformation("Aliases: alias call succeeded, found {Count} aliases for {User}.", results.Count - beforeCount, userEmail);
+            }
+            else
+            {
+                var body = await aliasResp.Content.ReadAsStringAsync();
+                _logger.LogWarning("Aliases: alias call failed {Status} for {User}. Response: {Body}", (int)aliasResp.StatusCode, userEmail, body);
+            }
+
+            return results.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Aliases: unexpected error for {User}.", userEmail);
             return [];
         }
     }

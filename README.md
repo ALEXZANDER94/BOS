@@ -29,7 +29,7 @@ A self-hosted, full-stack business operations platform covering supplier managem
 - Sign in with Google to connect your Gmail account (read-only access)
 - View and read emails directly within BOS
 - **Filter by client** — automatically surfaces emails matching a client's domain and contacts
-- **Filter by alias** — detect Google Workspace email aliases via the Admin SDK and filter the inbox by them
+- **Filter by group/alias** — detect Google Workspace groups and user aliases via the Admin SDK and filter the inbox by them
 - **Filter by category** — assign user-defined categories to emails and view them as a faceted list
 - **Search** — search across subject, sender, and body content via Gmail's native search
 - **Email categories** — user-defined top-level classifications (e.g. Invoice, Scheduling, Proposal) with colored badges
@@ -60,7 +60,7 @@ A self-hosted, full-stack business operations platform covering supplier managem
 - [.NET 8 SDK](https://dotnet.microsoft.com/download)
 - [Node.js 18+](https://nodejs.org/)
 - A **Google Cloud project** with a configured OAuth consent screen
-- A **Google Workspace** account (required for alias detection via the Admin SDK)
+- A **Google Workspace** account (required for group/alias detection via the Admin SDK)
 - An **Adobe PDF Services** account (required for PDF price sheet uploads; optional otherwise)
 
 ---
@@ -91,7 +91,7 @@ In your Google Cloud project, enable the following APIs:
    - `https://www.googleapis.com/auth/gmail.readonly`
 3. If your app is **External**, publish it and submit for Google verification. If it is **Internal** (Workspace organisation only), no verification is required.
 
-### 4. Service Account (Alias Detection)
+### 4. Service Account (Group & Alias Detection)
 
 1. Go to **IAM & Admin → Service Accounts → Create Service Account**
 2. Name it (e.g. `BOS Directory Reader`); do not assign any project-level roles
@@ -107,7 +107,10 @@ In your Google Cloud project, enable the following APIs:
 1. Go to **Security → Access and data control → API controls → Manage Domain Wide Delegation**
 2. Click **Add new**
 3. Enter the service account **Unique ID** (from step 4 above) as the Client ID
-4. Add the scope: `https://www.googleapis.com/auth/admin.directory.user.alias.readonly`
+4. Add the following scopes (comma-separated):
+   ```
+   https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.user.alias.readonly
+   ```
 5. Click **Authorize**
 
 ---
@@ -142,6 +145,7 @@ Google__ClientId=your-oauth-client-id
 Google__ClientSecret=your-oauth-client-secret
 Google__AllowedDomain=yourdomain.com
 Google__ServiceAccountKeyPath=/etc/bos/google-sa.json
+Google__ServiceAccountAdminEmail=admin@yourdomain.com
 ```
 
 Place the service account JSON key file at the path specified above and restrict permissions:
@@ -161,7 +165,8 @@ Create `backend/appsettings.Local.json` (already gitignored):
     "ClientId": "your-oauth-client-id",
     "ClientSecret": "your-oauth-client-secret",
     "AllowedDomain": "yourdomain.com",
-    "ServiceAccountKeyPath": "/path/to/google-sa.json"
+    "ServiceAccountKeyPath": "/path/to/google-sa.json",
+    "ServiceAccountAdminEmail": "admin@yourdomain.com"
   }
 }
 ```
@@ -208,7 +213,8 @@ All configuration keys follow ASP.NET Core conventions. Environment variables us
 | `Google:ClientId` | OAuth 2.0 Client ID | Yes |
 | `Google:ClientSecret` | OAuth 2.0 Client Secret | Yes |
 | `Google:AllowedDomain` | Restricts sign-in to this Workspace domain (leave empty to allow any Google account) | No |
-| `Google:ServiceAccountKeyPath` | Absolute path to the service account JSON key file | For alias detection |
+| `Google:ServiceAccountKeyPath` | Absolute path to the service account JSON key file | For group/alias detection |
+| `Google:ServiceAccountAdminEmail` | A Super Admin account email used to impersonate for Directory API calls | For group/alias detection |
 | `Database:Path` | Absolute path to the SQLite database file | Yes |
 
 ---

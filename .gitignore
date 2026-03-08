@@ -1,0 +1,29 @@
+# ── .NET ──────────────────────────────────────────────────────────────────────
+**/bin/
+**/obj/
+bos-publish/
+
+# Production / local appsettings overrides (contain real credentials)
+backend/appsettings.Production.json
+backend/appsettings.Local.json
+
+# Service account key — never commit; deploy via secrets.env on the server
+*service-account*.json
+*-sa.json
+*sa-key.json
+
+# ── Node / Frontend ───────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+
+# ── OS / Editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.vs/
+.claude/
+
+# ── Secrets / Environment ─────────────────────────────────────────────────────
+secrets.env
+*.env

@@ -3,6 +3,7 @@ using System;
 using BOS.Backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BOS.Backend.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260308042145_AddEmailNotes")]
+    partial class AddEmailNotes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.13");
@@ -461,60 +464,6 @@ namespace BOS.Backend.Data.Migrations
                     b.ToTable("GlossaryUnitStatuses");
                 });
 
-            modelBuilder.Entity("BOS.Backend.Models.Notification", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("body");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("created_at");
-
-                    b.Property<bool>("IsRead")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_read");
-
-                    b.Property<string>("RecipientEmail")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("recipient_email");
-
-                    b.Property<string>("RelatedMessageId")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("related_message_id");
-
-                    b.Property<int?>("RelatedNoteId")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("related_note_id");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("title");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("mention")
-                        .HasColumnName("type");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RecipientEmail", "IsRead", "CreatedAt");
-
-                    b.ToTable("Notifications");
-                });
-
             modelBuilder.Entity("BOS.Backend.Models.Project", b =>
                 {
                     b.Property<int>("Id")
@@ -633,36 +582,6 @@ namespace BOS.Backend.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("UserGoogleTokens");
-                });
-
-            modelBuilder.Entity("BOS.Backend.Models.UserPreference", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("key");
-
-                    b.Property<string>("UserEmail")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("user_email");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("value");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserEmail", "Key")
-                        .IsUnique();
-
-                    b.ToTable("UserPreferences");
                 });
 
             modelBuilder.Entity("BOS.Backend.Models.ActivityLog", b =>

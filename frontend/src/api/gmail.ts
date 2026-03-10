@@ -39,7 +39,7 @@ export const gmailApi = {
   getStatus: () =>
     axios.get<GmailStatusDto>(`${BASE}/status`).then(r => r.data),
 
-  listEmails: (params?: { clientId?: number; alias?: string; pageToken?: string; q?: string }) =>
+  listEmails: (params?: { clientId?: number; alias?: string; pageToken?: string; q?: string; maxResults?: number }) =>
     axios.get<EmailListResponse>(`${BASE}/emails`, { params }).then(r => r.data),
 
   getEmail: (messageId: string) =>

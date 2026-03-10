@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
 using BOS.Backend.Data;
+using BOS.Backend.Hubs;
 using BOS.Backend.Models;
 using BOS.Backend.Services;
 
@@ -17,6 +19,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, EmailUserIdProvider>();
 
 // ---------------------------------------------------------------------------
 // Authentication: ASP.NET Core cookie auth + Google OAuth2 provider.
@@ -147,6 +151,11 @@ builder.Services.AddScoped<IReportService,              ReportService>();
 // Gmail
 builder.Services.AddScoped<IGmailService,               GmailService>();
 
+// Workspace / Notifications
+builder.Services.AddScoped<IWorkspaceService,           WorkspaceService>();
+builder.Services.AddScoped<INotificationService,        NotificationService>();
+builder.Services.AddHostedService<NotificationCleanupService>();
+
 // CRM
 builder.Services.AddScoped<IClientService,              ClientService>();
 builder.Services.AddScoped<IContactService,             ContactService>();
@@ -182,6 +191,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 // ---------------------------------------------------------------------------
 // Auth endpoints — Google OAuth2 flow.

@@ -15,7 +15,7 @@ namespace BOS.Backend.Services;
 public interface IGmailService
 {
     Task<bool>                    HasValidTokenAsync(string userEmail);
-    Task<EmailListResponse>       ListEmailsAsync(string userEmail, string? pageToken = null, string? query = null);
+    Task<EmailListResponse>       ListEmailsAsync(string userEmail, string? pageToken = null, string? query = null, int maxResults = 25);
     Task<EmailDetailDto>          GetEmailAsync(string userEmail, string messageId);
     Task<IReadOnlyList<string>>   GetForwardingAddressesAsync(string userEmail);
     Task<IReadOnlyList<EmailSummaryDto>> GetEmailsByIdsAsync(string userEmail, IEnumerable<string> messageIds);
@@ -45,7 +45,7 @@ public class GmailService : IGmailService
     }
 
     public async Task<EmailListResponse> ListEmailsAsync(
-        string userEmail, string? pageToken = null, string? query = null)
+        string userEmail, string? pageToken = null, string? query = null, int maxResults = 25)
     {
         var accessToken = await GetValidAccessTokenAsync(userEmail);
         var service     = CreateApiClient(accessToken);
@@ -54,7 +54,7 @@ public class GmailService : IGmailService
         listReq.Q          = string.IsNullOrEmpty(query)
             ? "in:inbox OR in:sent"
             : $"({query}) -in:draft";
-        listReq.MaxResults = 25;
+        listReq.MaxResults = Math.Clamp(maxResults, 1, 100);
         listReq.PageToken  = pageToken;
 
         var listResp = await listReq.ExecuteAsync();

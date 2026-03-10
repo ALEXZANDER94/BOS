@@ -73,7 +73,7 @@ function ClientEmailsTab({ clientId }: { clientId: number }) {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
   const { data, isLoading, dataUpdatedAt } = useEmails({ type: 'client', id: clientId })
   const refresh = useRefreshEmails({ type: 'client', id: clientId })
-  const emails: EmailSummary[] = data?.emails ?? []
+  const emails: EmailSummary[] = data?.pages.flatMap(p => p.emails) ?? []
 
   const lastFetched = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

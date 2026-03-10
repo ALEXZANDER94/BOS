@@ -30,12 +30,39 @@ A self-hosted, full-stack business operations platform covering supplier managem
 - View and read emails directly within BOS
 - **Filter by client** — automatically surfaces emails matching a client's domain and contacts
 - **Filter by group/alias** — detect Google Workspace groups and user aliases via the Admin SDK and filter the inbox by them
+- **Toggleable aliases** — hide aliases you don't use from the filter sidebar; preference is persisted per user
 - **Filter by category** — assign user-defined categories to emails and view them as a faceted list
 - **Search** — search across subject, sender, and body content via Gmail's native search
 - **Email categories** — user-defined top-level classifications (e.g. Invoice, Scheduling, Proposal) with colored badges
 - **Category statuses** — user-defined workflow statuses scoped to each category (e.g. On-Hold, Processing, Completed)
 - Assign and reassign categories and statuses to emails in real time
+- **Collapsible To: field** — long recipient lists are truncated to the first address with a "+N more" toggle
+- **Add to BOS** — add a sender or recipient directly as a new Client or Contact from the email detail view; domain matching automatically suggests the correct client to link to
+- **Pagination** — configurable page size (25 / 50 / 100) with a "Load more" button; preference is persisted per user
 - Drafts are automatically excluded from all email views
+
+### Email Notes
+- Leave persistent notes on any email, visible to all users on the workspace
+- Notes panel sits in a sidebar to the right of the email detail view
+- Only the note author can edit or delete their own notes
+- **@mention** — type `@` while writing a note to bring up a searchable dropdown of Google Workspace users; selecting a user inserts their address and tags them in the note
+  - When viewing an alias-filtered inbox, only members of that alias group are taggable
+- Note count indicators appear on email rows in the list
+
+### Notifications
+- Users receive an in-app notification whenever they are @mentioned in a note
+- **Bell icon** in the top bar shows the number of unread notifications at a glance
+- Clicking the bell opens a notification panel listing recent alerts with timestamps
+- Clicking a notification navigates directly to the relevant email and marks it as read
+- "Mark all read" action available in the notification panel
+- **Real-time push** — notifications are delivered instantly via SignalR WebSockets; a toast appears in the bottom-right corner when a new notification arrives, even when the user is on a different page
+- Notifications older than 30 days are automatically purged to prevent database growth
+
+### Navigation
+- **Collapsible sidebar** — the main navigation sidebar can be collapsed to an icon-only strip to reclaim screen space; expanded or collapsed state is remembered across sessions
+
+### User Preferences
+- Per-user preferences (alias visibility, email page size) are stored on the server and roam across devices and browsers
 
 ### Settings
 - Configure Adobe PDF Services credentials
@@ -51,6 +78,7 @@ A self-hosted, full-stack business operations platform covering supplier managem
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, shadcn/ui, Radix UI |
 | Auth | Google OAuth 2.0 (cookie-based session) |
 | Email | Gmail API (read-only), Google Admin SDK Directory API |
+| Real-time | ASP.NET Core SignalR (WebSockets) |
 | PDF | Adobe PDF Services SDK |
 
 ---
@@ -60,7 +88,7 @@ A self-hosted, full-stack business operations platform covering supplier managem
 - [.NET 8 SDK](https://dotnet.microsoft.com/download)
 - [Node.js 18+](https://nodejs.org/)
 - A **Google Cloud project** with a configured OAuth consent screen
-- A **Google Workspace** account (required for group/alias detection via the Admin SDK)
+- A **Google Workspace** account (required for group/alias detection, @mention tagging, and real-time notifications via the Admin SDK)
 - An **Adobe PDF Services** account (required for PDF price sheet uploads; optional otherwise)
 
 ---
@@ -91,7 +119,9 @@ In your Google Cloud project, enable the following APIs:
    - `https://www.googleapis.com/auth/gmail.readonly`
 3. If your app is **External**, publish it and submit for Google verification. If it is **Internal** (Workspace organisation only), no verification is required.
 
-### 4. Service Account (Group & Alias Detection)
+### 4. Service Account (Admin SDK Features)
+
+The service account is used for alias/group detection, the @mention user list, and notification routing. All three features share the same key file.
 
 1. Go to **IAM & Admin → Service Accounts → Create Service Account**
 2. Name it (e.g. `BOS Directory Reader`); do not assign any project-level roles
@@ -102,16 +132,30 @@ In your Google Cloud project, enable the following APIs:
 
 ## Google Workspace Admin Console Setup
 
-> Requires a Super Admin account.
+> Requires a Super Admin account. Go to [admin.google.com](https://admin.google.com).
+
+### Domain-wide Delegation
 
 1. Go to **Security → Access and data control → API controls → Manage Domain Wide Delegation**
 2. Click **Add new**
 3. Enter the service account **Unique ID** (from step 4 above) as the Client ID
-4. Add the following scopes (comma-separated):
+4. Add **all** of the following scopes as a single comma-separated list:
    ```
-   https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.user.alias.readonly
+   https://www.googleapis.com/auth/admin.directory.group.readonly,
+   https://www.googleapis.com/auth/admin.directory.user.alias.readonly,
+   https://www.googleapis.com/auth/admin.directory.user.readonly,
+   https://www.googleapis.com/auth/admin.directory.group.member.readonly
    ```
 5. Click **Authorize**
+
+| Scope | Used for |
+|---|---|
+| `admin.directory.group.readonly` | Listing alias groups the signed-in user belongs to (filter sidebar) |
+| `admin.directory.user.alias.readonly` | Listing per-user email aliases (filter sidebar) |
+| `admin.directory.user.readonly` | Listing all domain users for the @mention dropdown |
+| `admin.directory.group.member.readonly` | Listing members of an alias group for context-aware @mention |
+
+> **Note:** `Google:ServiceAccountAdminEmail` must be set to an account with **Super Admin** privileges. The Directory API requires admin-level impersonation even for read-only calls.
 
 ---
 
@@ -199,7 +243,35 @@ npm run dev
 ```bash
 cd frontend
 npm run build
-# Serve the dist/ output via a reverse proxy (e.g. Nginx) pointing to the backend on port 5000
+# The built assets are written to backend/wwwroot and served by ASP.NET Core directly.
+# Point your reverse proxy (e.g. Nginx) at the backend on port 5000.
+```
+
+---
+
+## Nginx Configuration (Production)
+
+If you are serving BOS behind Nginx, the `/hubs/` path requires WebSocket upgrade headers for SignalR to function. Without these, real-time notifications will not be delivered (though the rest of the application is unaffected).
+
+```nginx
+# Standard API and SPA traffic
+location / {
+    proxy_pass         http://localhost:5000;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Real-IP $remote_addr;
+    proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+}
+
+# SignalR WebSocket hub — requires upgrade headers
+location /hubs/ {
+    proxy_pass         http://localhost:5000;
+    proxy_http_version 1.1;
+    proxy_set_header   Upgrade $http_upgrade;
+    proxy_set_header   Connection "upgrade";
+    proxy_set_header   Host $host;
+    proxy_cache_bypass $http_upgrade;
+}
 ```
 
 ---
@@ -212,9 +284,9 @@ All configuration keys follow ASP.NET Core conventions. Environment variables us
 |---|---|---|
 | `Google:ClientId` | OAuth 2.0 Client ID | Yes |
 | `Google:ClientSecret` | OAuth 2.0 Client Secret | Yes |
-| `Google:AllowedDomain` | Restricts sign-in to this Workspace domain (leave empty to allow any Google account) | No |
-| `Google:ServiceAccountKeyPath` | Absolute path to the service account JSON key file | For group/alias detection |
-| `Google:ServiceAccountAdminEmail` | A Super Admin account email used to impersonate for Directory API calls | For group/alias detection |
+| `Google:AllowedDomain` | Restricts sign-in to this Workspace domain (leave empty to allow any Google account). Also used to enumerate domain users for @mention. | Recommended |
+| `Google:ServiceAccountKeyPath` | Absolute path to the service account JSON key file | For Admin SDK features |
+| `Google:ServiceAccountAdminEmail` | A Super Admin account email used to impersonate for Directory API calls | For Admin SDK features |
 | `Database:Path` | Absolute path to the SQLite database file | Yes |
 
 ---

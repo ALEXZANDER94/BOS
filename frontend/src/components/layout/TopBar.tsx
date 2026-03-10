@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { LogOut, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import axios from 'axios'
 
 interface TopBarProps {
@@ -13,8 +14,6 @@ export default function TopBar({ user }: TopBarProps) {
   const logoutMutation = useMutation({
     mutationFn: () => axios.post('/api/auth/logout'),
     onSuccess: () => {
-      // Immediately clear the cached user so App.tsx re-renders to LoginPage
-      // without waiting for a background refetch (which would preserve stale data).
       queryClient.setQueryData(['me'], null)
     },
   })
@@ -24,8 +23,10 @@ export default function TopBar({ user }: TopBarProps) {
       {/* Left side: could hold breadcrumbs in future */}
       <div />
 
-      {/* Right side: user info + logout */}
+      {/* Right side: notifications + user info + logout */}
       <div className="flex items-center gap-3">
+        <NotificationBell />
+
         <div className="flex items-center gap-2 text-sm">
           <User className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium">{user.name}</span>

@@ -25,6 +25,9 @@ public class AppDbContext : DbContext
     public DbSet<EmailCategory>       EmailCategories      => Set<EmailCategory>();
     public DbSet<EmailCategoryStatus> EmailCategoryStatuses => Set<EmailCategoryStatus>();
     public DbSet<EmailAssignment>     EmailAssignments     => Set<EmailAssignment>();
+    public DbSet<EmailNote>           EmailNotes           => Set<EmailNote>();
+    public DbSet<UserPreference>      UserPreferences      => Set<UserPreference>();
+    public DbSet<Notification>        Notifications        => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -193,6 +196,48 @@ public class AppDbContext : DbContext
                   .HasForeignKey(e => e.StatusId)
                   .OnDelete(DeleteBehavior.SetNull)
                   .IsRequired(false);
+        });
+
+        // ── Notification ─────────────────────────────────────────────────────────
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.RecipientEmail).HasColumnName("recipient_email").IsRequired();
+            entity.Property(e => e.Type).HasColumnName("type").IsRequired().HasDefaultValue("mention");
+            entity.Property(e => e.Title).HasColumnName("title").IsRequired();
+            entity.Property(e => e.Body).HasColumnName("body").IsRequired();
+            entity.Property(e => e.IsRead).HasColumnName("is_read").HasDefaultValue(false);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.RelatedMessageId).HasColumnName("related_message_id");
+            entity.Property(e => e.RelatedNoteId).HasColumnName("related_note_id");
+            // Index for efficient unread-count and notification-list queries per user
+            entity.HasIndex(e => new { e.RecipientEmail, e.IsRead, e.CreatedAt });
+        });
+
+        // ── UserPreference ───────────────────────────────────────────────────────
+        modelBuilder.Entity<UserPreference>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserEmail).HasColumnName("user_email").IsRequired();
+            entity.Property(e => e.Key).HasColumnName("key").IsRequired();
+            entity.Property(e => e.Value).HasColumnName("value").IsRequired();
+            // Each user can have at most one value per preference key
+            entity.HasIndex(e => new { e.UserEmail, e.Key }).IsUnique();
+        });
+
+        // ── EmailNote ────────────────────────────────────────────────────────────
+        modelBuilder.Entity<EmailNote>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.MessageId).HasColumnName("message_id").IsRequired();
+            entity.Property(e => e.UserEmail).HasColumnName("user_email").IsRequired();
+            entity.Property(e => e.NoteText).HasColumnName("note_text").IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.HasIndex(e => e.MessageId);
         });
 
         // ── GlossaryUnit ────────────────────────────────────────────────────────

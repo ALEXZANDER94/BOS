@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
-import { RefreshCw, Mail, MailOpen, AlertCircle, Inbox, Search, X } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import {
+  RefreshCw, Mail, MailOpen, AlertCircle, Inbox, Search, X,
+  Settings2, Eye, EyeOff, ChevronDown, ChevronUp,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -12,10 +17,15 @@ import { useClients } from '@/hooks/useClients'
 import {
   useEmailCategories, useEmailAssignmentsBatch, useCategoryEmails,
 } from '@/hooks/useEmailCategories'
+import { useUserPreference } from '@/hooks/useUserPreference'
 import { CategoryManagementDialog } from '@/components/email/CategoryManagementDialog'
 import { EmailAssignmentPanel } from '@/components/email/EmailAssignmentPanel'
+import { EmailNotesPanel } from '@/components/email/EmailNotesPanel'
+import { AddToBosButton } from '@/components/email/AddToBosButton'
+import { emailNotesApi, type EmailNoteCounts } from '@/api/emailNotes'
 import type { EmailSummary } from '@/api/gmail'
 import type { EmailAssignment } from '@/api/emailCategories'
+import type { Client } from '@/api/clients'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -31,7 +41,11 @@ function displayName(email: EmailSummary) {
   return email.fromName || email.fromAddress
 }
 
-function filterLabel(filter: EmailFilter, clients: { id: number; name: string }[], categories: { id: number; name: string }[]) {
+function filterLabel(
+  filter:     EmailFilter,
+  clients:    { id: number; name: string }[],
+  categories: { id: number; name: string }[],
+) {
   if (filter.type === 'all')      return 'All Emails'
   if (filter.type === 'client')   return clients.find(c => c.id === filter.id)?.name ?? 'Emails'
   if (filter.type === 'alias')    return filter.address
@@ -39,15 +53,28 @@ function filterLabel(filter: EmailFilter, clients: { id: number; name: string }[
   return 'All Emails'
 }
 
+// Parses "Display Name <email@example.com>" or bare "email@example.com"
+function parseEmailAddress(raw: string): { address: string; name: string } {
+  raw = raw.trim()
+  const lt = raw.indexOf('<')
+  if (lt >= 0 && raw.endsWith('>')) {
+    return {
+      name:    raw.slice(0, lt).trim().replace(/^"|"$/g, ''),
+      address: raw.slice(lt + 1, -1).trim(),
+    }
+  }
+  return { address: raw, name: '' }
+}
+
 // ── Sidebar button ────────────────────────────────────────────────────────────
 
 function SidebarBtn({
   active, onClick, children, dot,
 }: {
-  active:    boolean
-  onClick:   () => void
-  children:  React.ReactNode
-  dot?:      string
+  active:   boolean
+  onClick:  () => void
+  children: React.ReactNode
+  dot?:     string
 }) {
   return (
     <button
@@ -59,12 +86,7 @@ function SidebarBtn({
           : 'text-muted-foreground hover:bg-muted'
       )}
     >
-      {dot && (
-        <span
-          className="h-2.5 w-2.5 rounded-full shrink-0"
-          style={{ backgroundColor: dot }}
-        />
-      )}
+      {dot && <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: dot }} />}
       <span className="truncate">{children}</span>
     </button>
   )
@@ -73,15 +95,13 @@ function SidebarBtn({
 // ── Email list item ───────────────────────────────────────────────────────────
 
 function EmailRow({
-  email,
-  isSelected,
-  assignment,
-  onClick,
+  email, isSelected, assignment, noteCount, onClick,
 }: {
-  email:      EmailSummary
-  isSelected: boolean
+  email:       EmailSummary
+  isSelected:  boolean
   assignment?: EmailAssignment
-  onClick:    () => void
+  noteCount?:  number
+  onClick:     () => void
 }) {
   return (
     <button
@@ -126,6 +146,11 @@ function EmailRow({
             {assignment.statusName && ` · ${assignment.statusName}`}
           </Badge>
         )}
+        {noteCount != null && noteCount > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {noteCount} note{noteCount !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
     </button>
   )
@@ -133,7 +158,60 @@ function EmailRow({
 
 // ── Email detail panel ────────────────────────────────────────────────────────
 
-function EmailDetailPanel({ messageId }: { messageId: string }) {
+function ToField({
+  raw,
+  clients,
+}: {
+  raw:     string
+  clients: Client[]
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const parts   = raw.split(',').map(s => s.trim()).filter(Boolean)
+  const visible = expanded ? parts : parts.slice(0, 1)
+  const hidden  = parts.length - 1
+
+  return (
+    <p className="flex flex-wrap items-center gap-x-1">
+      <span className="font-medium text-foreground">To:</span>
+      {visible.map((raw, i) => {
+        const { address, name } = parseEmailAddress(raw)
+        return (
+          <span key={i} className="inline-flex items-center gap-0.5">
+            {i > 0 && <span className="text-muted-foreground">,</span>}
+            <span>{raw}</span>
+            <AddToBosButton address={address} name={name} clients={clients} />
+          </span>
+        )
+      })}
+      {!expanded && hidden > 0 && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
+        >
+          <ChevronDown className="h-3 w-3" />
+          +{hidden} more
+        </button>
+      )}
+      {expanded && parts.length > 1 && (
+        <button
+          onClick={() => setExpanded(false)}
+          className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
+        >
+          <ChevronUp className="h-3 w-3" />
+          show less
+        </button>
+      )}
+    </p>
+  )
+}
+
+function EmailDetailPanel({
+  messageId,
+  clients,
+}: {
+  messageId: string
+  clients:   Client[]
+}) {
   const { data: detail, isLoading } = useEmailDetail(messageId)
 
   if (isLoading) {
@@ -158,14 +236,20 @@ function EmailDetailPanel({ messageId }: { messageId: string }) {
       <div className="px-5 py-4 border-b border-border space-y-1">
         <h3 className="text-base font-semibold leading-snug">{detail.subject}</h3>
         <div className="text-xs text-muted-foreground space-y-1">
-          <p>
-            <span className="font-medium text-foreground">From:</span>{' '}
-            {detail.fromName ? `${detail.fromName} <${detail.fromAddress}>` : detail.fromAddress}
+          <p className="flex items-center gap-1 flex-wrap">
+            <span className="font-medium text-foreground">From:</span>
+            <span>
+              {detail.fromName
+                ? `${detail.fromName} <${detail.fromAddress}>`
+                : detail.fromAddress}
+            </span>
+            <AddToBosButton
+              address={detail.fromAddress}
+              name={detail.fromName}
+              clients={clients}
+            />
           </p>
-          <p>
-            <span className="font-medium text-foreground">To:</span>{' '}
-            {detail.toAddresses}
-          </p>
+          <ToField raw={detail.toAddresses} clients={clients} />
           {detail.ccAddresses && (
             <p>
               <span className="font-medium text-foreground">Cc:</span>{' '}
@@ -178,8 +262,8 @@ function EmailDetailPanel({ messageId }: { messageId: string }) {
           </p>
           {detail.clientName && (
             <p>
-              <span className="font-medium text-foreground">Client:</span>{' '}
-              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
+              <span className="font-medium text-foreground">Client:</span>
+              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
                 {detail.clientName}
               </Badge>
             </p>
@@ -214,10 +298,27 @@ function EmailDetailPanel({ messageId }: { messageId: string }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function EmailsPage() {
-  const [filter, setFilter]               = useState<EmailFilter>({ type: 'all' })
+  const [searchParams, setSearchParams]           = useSearchParams()
+  const [filter, setFilter]                       = useState<EmailFilter>({ type: 'all' })
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
-  const [searchInput, setSearchInput]     = useState('')
-  const [search, setSearch]               = useState('')
+  const [searchInput, setSearchInput]             = useState('')
+  const [search, setSearch]                       = useState('')
+  const [isEditingAliases, setIsEditingAliases]   = useState(false)
+
+  // Deep-link from notification: /emails?select=messageId
+  useEffect(() => {
+    const sel = searchParams.get('select')
+    if (sel) {
+      setSelectedMessageId(sel)
+      setSearchParams({}, { replace: true })
+    }
+  // Run once on mount only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // User preferences
+  const { value: pageSize, setValue: setPageSize }         = useUserPreference<number>('email-page-size', 25)
+  const { value: hiddenAliases, setValue: setHiddenAliases } = useUserPreference<string[]>('hidden-aliases', [])
 
   // Debounce search input 300 ms
   useEffect(() => {
@@ -225,14 +326,20 @@ export default function EmailsPage() {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  const { data: status }                   = useGmailStatus()
-  const { data: aliases = [] }             = useGmailAliases()
-  const { data: clients = [] }             = useClients()
-  const { data: categories = [] }          = useEmailCategories()
+  const { data: status }          = useGmailStatus()
+  const { data: aliases = [] }    = useGmailAliases()
+  const { data: clients = [] }    = useClients()
+  const { data: categories = [] } = useEmailCategories()
 
-  // Standard Gmail email fetch (all / client / alias filters)
-  const { data: gmailData, isLoading: gmailLoading, dataUpdatedAt } =
-    useEmails(filter, search || undefined)
+  // Standard Gmail email fetch (uses infinite query for load-more)
+  const {
+    data: gmailData,
+    isLoading: gmailLoading,
+    dataUpdatedAt,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useEmails(filter, search || undefined, pageSize)
 
   // Category-filtered email fetch (assignments DB → Gmail by IDs)
   const { data: categoryData, isLoading: categoryLoading } =
@@ -243,7 +350,7 @@ export default function EmailsPage() {
   // Unified email list depending on active filter
   const emails: EmailSummary[] = filter.type === 'category'
     ? (categoryData?.emails ?? [])
-    : (gmailData?.emails ?? [])
+    : (gmailData?.pages.flatMap(p => p.emails) ?? [])
 
   const isLoading = filter.type === 'category' ? categoryLoading : gmailLoading
 
@@ -255,6 +362,14 @@ export default function EmailsPage() {
   const assignmentMap = useMemo(() =>
     Object.fromEntries(batchAssignments.map(a => [a.messageId, a])),
     [batchAssignments])
+
+  // Fetch note counts for visible emails
+  const noteCountIds = messageIds.join(',')
+  const { data: noteCounts = {} } = useQuery<EmailNoteCounts>({
+    queryKey: ['email-note-counts', noteCountIds],
+    queryFn:  () => emailNotesApi.getNoteCounts(messageIds),
+    enabled:  messageIds.length > 0,
+  })
 
   // Category assignments already returned by useCategoryEmails
   const categoryAssignmentMap = useMemo(() => {
@@ -270,10 +385,21 @@ export default function EmailsPage() {
     ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null
 
+  // Aliases after hiding user-hidden ones
+  const visibleAliases = aliases.filter(a => !hiddenAliases.includes(a))
+
   function selectFilter(f: EmailFilter) {
     setFilter(f)
     setSelectedMessageId(null)
     setSearchInput('')
+  }
+
+  function toggleAlias(address: string) {
+    if (hiddenAliases.includes(address)) {
+      setHiddenAliases(hiddenAliases.filter(a => a !== address))
+    } else {
+      setHiddenAliases([...hiddenAliases, address])
+    }
   }
 
   // Not connected state
@@ -292,14 +418,28 @@ export default function EmailsPage() {
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden -mx-6 -mt-6">
 
-      {/* ── Sidebar ── */}
+      {/* ── Filter sidebar ── */}
       <aside className="w-52 shrink-0 border-r border-border flex flex-col overflow-hidden">
 
         {/* Inboxes */}
-        <div className="px-3 py-3 border-b border-border">
+        <div className="px-3 py-3 border-b border-border flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Inboxes
           </p>
+          {aliases.length > 0 && (
+            <button
+              onClick={() => setIsEditingAliases(v => !v)}
+              title={isEditingAliases ? 'Done' : 'Show/hide aliases'}
+              className={cn(
+                'rounded p-0.5 transition-colors',
+                isEditingAliases
+                  ? 'text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         <nav className="p-2 space-y-0.5 border-b border-border">
           <SidebarBtn
@@ -308,15 +448,47 @@ export default function EmailsPage() {
           >
             All Emails
           </SidebarBtn>
-          {aliases.map(address => (
-            <SidebarBtn
-              key={address}
-              active={filter.type === 'alias' && filter.address === address}
-              onClick={() => selectFilter({ type: 'alias', address })}
-            >
-              {address}
-            </SidebarBtn>
-          ))}
+
+          {isEditingAliases ? (
+            // Edit mode: show all aliases with eye toggles
+            aliases.map(address => (
+              <div key={address} className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-muted">
+                <span className={cn(
+                  'text-sm flex-1 truncate',
+                  hiddenAliases.includes(address) ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground',
+                )}>
+                  {address}
+                </span>
+                <button
+                  onClick={() => toggleAlias(address)}
+                  title={hiddenAliases.includes(address) ? 'Show alias' : 'Hide alias'}
+                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {hiddenAliases.includes(address)
+                    ? <EyeOff className="h-3.5 w-3.5" />
+                    : <Eye    className="h-3.5 w-3.5" />
+                  }
+                </button>
+              </div>
+            ))
+          ) : (
+            // Normal mode: only visible aliases
+            visibleAliases.map(address => (
+              <SidebarBtn
+                key={address}
+                active={filter.type === 'alias' && filter.address === address}
+                onClick={() => selectFilter({ type: 'alias', address })}
+              >
+                {address}
+              </SidebarBtn>
+            ))
+          )}
+
+          {!isEditingAliases && hiddenAliases.length > 0 && (
+            <p className="px-3 pt-1 text-[10px] text-muted-foreground/50">
+              {hiddenAliases.length} alias{hiddenAliases.length !== 1 ? 'es' : ''} hidden
+            </p>
+          )}
         </nav>
 
         {/* Categories */}
@@ -375,17 +547,32 @@ export default function EmailsPage() {
                 <p className="text-[11px] text-muted-foreground">Updated {lastFetched}</p>
               )}
             </div>
-            {filter.type !== 'category' && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => refresh()}
-                title="Refresh"
-              >
-                <RefreshCw className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
-              </Button>
-            )}
+            <div className="flex items-center gap-1.5">
+              {/* Page size selector */}
+              {filter.type !== 'category' && (
+                <select
+                  value={pageSize}
+                  onChange={e => setPageSize(Number(e.target.value))}
+                  className="text-[11px] text-muted-foreground bg-transparent border border-border rounded px-1 py-0.5 cursor-pointer hover:border-foreground transition-colors focus:outline-none"
+                  title="Emails per page"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              )}
+              {filter.type !== 'category' && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => refresh()}
+                  title="Refresh"
+                >
+                  <RefreshCw className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
+                </Button>
+              )}
+            </div>
           </div>
           {filter.type !== 'category' && (
             <div className="px-3 pb-2.5 relative">
@@ -420,15 +607,32 @@ export default function EmailsPage() {
               <p className="text-sm text-muted-foreground">No emails found.</p>
             </div>
           ) : (
-            emails.map(email => (
-              <EmailRow
-                key={email.messageId}
-                email={email}
-                isSelected={selectedMessageId === email.messageId}
-                assignment={effectiveAssignmentMap[email.messageId]}
-                onClick={() => setSelectedMessageId(email.messageId)}
-              />
-            ))
+            <>
+              {emails.map(email => (
+                <EmailRow
+                  key={email.messageId}
+                  email={email}
+                  isSelected={selectedMessageId === email.messageId}
+                  assignment={effectiveAssignmentMap[email.messageId]}
+                  noteCount={noteCounts[email.messageId]}
+                  onClick={() => setSelectedMessageId(email.messageId)}
+                />
+              ))}
+              {/* Load more */}
+              {hasNextPage && filter.type !== 'category' && (
+                <div className="px-4 py-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                  >
+                    {isFetchingNextPage ? 'Loading…' : 'Load more'}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -448,11 +652,19 @@ export default function EmailsPage() {
       </div>
 
       {/* ── Detail panel ── */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 flex overflow-hidden">
         {selectedMessageId ? (
-          <EmailDetailPanel messageId={selectedMessageId} />
+          <>
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <EmailDetailPanel messageId={selectedMessageId} clients={clients} />
+            </div>
+            <EmailNotesPanel
+              messageId={selectedMessageId}
+              aliasFilter={filter.type === 'alias' ? filter.address : undefined}
+            />
+          </>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center">
             <Mail className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Select an email to read it</p>
           </div>

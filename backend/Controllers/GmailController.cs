@@ -70,10 +70,11 @@ public class GmailController : ControllerBase
     // q is an additional search term composed on top of whichever filter is active.
     [HttpGet("emails")]
     public async Task<IActionResult> ListEmails(
-        [FromQuery] int?    clientId  = null,
-        [FromQuery] string? alias     = null,
-        [FromQuery] string? pageToken = null,
-        [FromQuery] string? q         = null)
+        [FromQuery] int?    clientId   = null,
+        [FromQuery] string? alias      = null,
+        [FromQuery] string? pageToken  = null,
+        [FromQuery] string? q          = null,
+        [FromQuery] int     maxResults = 25)
     {
         var email = CurrentUserEmail;
         if (string.IsNullOrEmpty(email)) return Unauthorized();
@@ -104,7 +105,7 @@ public class GmailController : ControllerBase
                 query = q;
             }
 
-            var result = await _gmail.ListEmailsAsync(email, pageToken, query);
+            var result = await _gmail.ListEmailsAsync(email, pageToken, query, maxResults);
             return Ok(result);
         }
         catch (Exception ex)

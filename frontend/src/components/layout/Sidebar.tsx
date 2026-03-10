@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Building2, BookOpen, FileSearch, Settings2, Users, FolderKanban, Mail } from 'lucide-react'
+import { Building2, BookOpen, FileSearch, Settings2, Users, FolderKanban, Mail, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ── Nav structure ─────────────────────────────────────────────────────────────
@@ -64,26 +64,49 @@ function BosLogoMark({ className }: { className?: string }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function Sidebar() {
+interface SidebarProps {
+  isCollapsed: boolean
+  onToggle: () => void
+}
+
+export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   return (
-    <aside className="flex w-60 flex-col bg-sidebar border-r border-sidebar-border">
+    <aside
+      className={cn(
+        'flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-200 shrink-0',
+        isCollapsed ? 'w-14' : 'w-60'
+      )}
+    >
       {/* Brand area */}
-      <div className="flex items-center gap-3 border-b border-sidebar-border px-4 py-4">
+      <div className={cn(
+        'flex items-center border-b border-sidebar-border px-3 py-4',
+        isCollapsed ? 'justify-center' : 'gap-3 px-4'
+      )}>
         <BosLogoMark className="h-9 w-8 shrink-0" />
-        <div className="min-w-0">
-          <h1 className="text-base font-bold tracking-tight text-sidebar-foreground leading-tight">
-            BOS
-          </h1>
-          <p className="text-[10px] text-sidebar-foreground/50 leading-tight truncate">
-            Business Operations Suite
-          </p>
-        </div>
+        {!isCollapsed && (
+          <div className="min-w-0">
+            <h1 className="text-base font-bold tracking-tight text-sidebar-foreground leading-tight">
+              BOS
+            </h1>
+            <p className="text-[10px] text-sidebar-foreground/50 leading-tight truncate">
+              Business Operations Suite
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Navigation links */}
       <nav className="flex-1 p-2 space-y-0.5">
         {navItems.map((item, index) => {
           if (item.kind === 'section') {
+            if (isCollapsed) {
+              return (
+                <div
+                  key={`section-${index}`}
+                  className="mx-3 my-2 border-t border-sidebar-border/40"
+                />
+              )
+            }
             return (
               <p
                 key={`section-${index}`}
@@ -100,9 +123,11 @@ export default function Sidebar() {
               key={item.to}
               to={item.to}
               end
+              title={isCollapsed ? item.label : undefined}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center rounded-md py-2 text-sm font-medium transition-colors',
+                  isCollapsed ? 'justify-center px-0' : 'gap-3 px-3',
                   isActive
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                     : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
@@ -110,17 +135,32 @@ export default function Sidebar() {
               }
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {item.label}
+              {!isCollapsed && item.label}
             </NavLink>
           )
         })}
       </nav>
 
-      {/* Tagline footer */}
-      <div className="border-t border-sidebar-border px-4 py-3">
-        <p className="text-[9px] text-sidebar-foreground/30 tracking-widest uppercase select-none text-center">
-          Streamline · Oversight · Performance
-        </p>
+      {/* Toggle button */}
+      <div className="border-t border-sidebar-border p-2">
+        <button
+          onClick={onToggle}
+          className={cn(
+            'w-full flex items-center rounded-md py-2 text-xs text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors',
+            isCollapsed ? 'justify-center px-0' : 'gap-2 px-3'
+          )}
+          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {isCollapsed
+            ? <ChevronRight className="h-4 w-4 shrink-0" />
+            : (
+              <>
+                <ChevronLeft className="h-4 w-4 shrink-0" />
+                <span>Collapse</span>
+              </>
+            )
+          }
+        </button>
       </div>
     </aside>
   )

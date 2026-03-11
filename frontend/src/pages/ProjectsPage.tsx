@@ -136,7 +136,12 @@ export default function ProjectsPage() {
                 <TableRow key={project.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{project.name}</span>
+                      <Link
+                        to={`/projects/${project.id}`}
+                        className="font-medium hover:underline text-foreground"
+                      >
+                        {project.name}
+                      </Link>
                       <Badge
                         variant="outline"
                         className={`text-[10px] ${STATUS_COLORS[project.status] ?? ''}`}

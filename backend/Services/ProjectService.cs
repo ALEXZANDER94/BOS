@@ -9,6 +9,7 @@ public interface IProjectService
 {
     Task<List<ProjectDto>>                  GetAllAsync(int clientId);
     Task<List<ProjectWithClientDto>>        GetAllProjectsAsync(string? search, string? status, int? clientId);
+    Task<ProjectDetailDto?>                 GetByIdAsync(int id);
     Task<ProjectDto>                        CreateAsync(int clientId, CreateProjectRequest request);
     Task<(ProjectDto? Dto, string? Error)>  UpdateAsync(int clientId, int id, UpdateProjectRequest request);
     Task<bool>                              DeleteAsync(int clientId, int id);
@@ -32,6 +33,47 @@ public class ProjectService : IProjectService
             .ToListAsync();
 
         return projects.Select(ToDto).ToList();
+    }
+
+    public async Task<ProjectDetailDto?> GetByIdAsync(int id)
+    {
+        var project = await _db.Projects
+            .Include(p => p.Client)
+            .Include(p => p.ProjectContacts).ThenInclude(pc => pc.Contact)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (project is null) return null;
+
+        var buildingCount = await _db.Buildings.CountAsync(b => b.ProjectId == id);
+        var lotCount      = await _db.Lots.CountAsync(l => l.Building!.ProjectId == id);
+        var poCount       = await _db.PurchaseOrders.CountAsync(po => po.ProjectId == id);
+        var totalAmount   = await _db.PurchaseOrders
+            .Where(po => po.ProjectId == id)
+            .SumAsync(po => (decimal?)po.Amount) ?? 0m;
+
+        return new ProjectDetailDto(
+            project.Id,
+            project.ClientId,
+            project.Client!.Name,
+            project.Name,
+            project.Description,
+            project.Status,
+            project.StartDate.HasValue ? project.StartDate.Value.ToString("o") : null,
+            project.EndDate.HasValue   ? project.EndDate.Value.ToString("o")   : null,
+            project.CreatedAt.ToString("o"),
+            project.UpdatedAt.ToString("o"),
+            buildingCount,
+            lotCount,
+            poCount,
+            totalAmount,
+            project.ProjectContacts.Select(pc => new AssignedContactDto(
+                pc.Contact.Id,
+                pc.Contact.Name,
+                pc.Contact.Email,
+                pc.Contact.Phone,
+                pc.Contact.Title
+            )).ToList()
+        );
     }
 
     public async Task<List<ProjectWithClientDto>> GetAllProjectsAsync(string? search, string? status, int? clientId)

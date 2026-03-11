@@ -162,6 +162,9 @@ builder.Services.AddScoped<IContactService,             ContactService>();
 builder.Services.AddScoped<IProjectService,             ProjectService>();
 builder.Services.AddScoped<IActivityLogService,         ActivityLogService>();
 
+// QuickBooks
+builder.Services.AddScoped<IQuickBooksService,          QuickBooksService>();
+
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------

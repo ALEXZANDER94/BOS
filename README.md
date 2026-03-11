@@ -22,8 +22,19 @@ A self-hosted, full-stack business operations platform covering supplier managem
 ### CRM
 - **Clients** — track companies with domain, industry, website, and address
 - **Contacts** — link contacts to clients with email, phone, and title
-- **Projects** — associate projects with clients and contacts, track status
+- **Projects** — associate projects with clients and contacts, track status; click any project to open its detail page
 - **Activity Logs** — record notes and activity against client records
+
+### Project Details
+- Dedicated detail page per project with three tabs: **Overview**, **Buildings & Lots**, and **Purchase Orders**
+- **Overview** — full description, summary stats (buildings, lots, PO count, total PO amount), and assigned contacts
+- **Buildings & Lots** — hierarchical tree of buildings and lots within a project; add, rename, and delete inline without leaving the page
+  - Each lot can have a street address attached (add, edit, or remove inline)
+  - Deleting a lot that has purchase orders is blocked with a clear error message
+- **Purchase Orders** — log purchase orders against a specific lot within the project; track order number, amount, and payment status
+  - Status is read-only within BOS and is synced directly from QuickBooks Online
+  - **Sync** button per row, or **Sync All** to refresh every PO on the project at once
+  - Sync buttons are disabled with a tooltip when QuickBooks is not connected
 
 ### Email (Gmail Integration)
 - Sign in with Google to connect your Gmail account (read-only access)
@@ -66,6 +77,7 @@ A self-hosted, full-stack business operations platform covering supplier managem
 
 ### Settings
 - Configure Adobe PDF Services credentials
+- Connect or disconnect QuickBooks Online via OAuth
 - Manage application-wide settings
 
 ---
@@ -80,6 +92,7 @@ A self-hosted, full-stack business operations platform covering supplier managem
 | Email | Gmail API (read-only), Google Admin SDK Directory API |
 | Real-time | ASP.NET Core SignalR (WebSockets) |
 | PDF | Adobe PDF Services SDK |
+| Accounting | QuickBooks Online API (OAuth 2.0, PO status sync) |
 
 ---
 
@@ -90,6 +103,7 @@ A self-hosted, full-stack business operations platform covering supplier managem
 - A **Google Cloud project** with a configured OAuth consent screen
 - A **Google Workspace** account (required for group/alias detection, @mention tagging, and real-time notifications via the Admin SDK)
 - An **Adobe PDF Services** account (required for PDF price sheet uploads; optional otherwise)
+- An **Intuit Developer account** (required for QuickBooks PO sync; optional otherwise)
 
 ---
 
@@ -190,6 +204,9 @@ Google__ClientSecret=your-oauth-client-secret
 Google__AllowedDomain=yourdomain.com
 Google__ServiceAccountKeyPath=/etc/bos/google-sa.json
 Google__ServiceAccountAdminEmail=admin@yourdomain.com
+QuickBooks__ClientId=your-intuit-client-id
+QuickBooks__ClientSecret=your-intuit-client-secret
+QuickBooks__RedirectUri=https://yourdomain.com/api/quickbooks/callback
 ```
 
 Place the service account JSON key file at the path specified above and restrict permissions:
@@ -211,6 +228,11 @@ Create `backend/appsettings.Local.json` (already gitignored):
     "AllowedDomain": "yourdomain.com",
     "ServiceAccountKeyPath": "/path/to/google-sa.json",
     "ServiceAccountAdminEmail": "admin@yourdomain.com"
+  },
+  "QuickBooks": {
+    "ClientId": "your-intuit-client-id",
+    "ClientSecret": "your-intuit-client-secret",
+    "RedirectUri": "http://localhost:5000/api/quickbooks/callback"
   }
 }
 ```
@@ -288,12 +310,52 @@ All configuration keys follow ASP.NET Core conventions. Environment variables us
 | `Google:ServiceAccountKeyPath` | Absolute path to the service account JSON key file | For Admin SDK features |
 | `Google:ServiceAccountAdminEmail` | A Super Admin account email used to impersonate for Directory API calls | For Admin SDK features |
 | `Database:Path` | Absolute path to the SQLite database file | Yes |
+| `QuickBooks:ClientId` | Intuit app Client ID | For QB sync |
+| `QuickBooks:ClientSecret` | Intuit app Client Secret | For QB sync |
+| `QuickBooks:RedirectUri` | OAuth callback URI registered in the Intuit Developer Console | For QB sync |
 
 ---
 
 ## Adobe PDF Services
 
 PDF price sheet uploads require an [Adobe PDF Services](https://developer.adobe.com/document-services/) account. Credentials are configured per-deployment through **Settings → Adobe PDF Services** within the application itself — no configuration file entry is needed. If no credentials are configured, PDF upload is disabled and only XLSX/CSV uploads are available.
+
+---
+
+## QuickBooks Online Integration
+
+Purchase order status sync requires a free [Intuit Developer](https://developer.intuit.com/) account. The OAuth credentials identify the BOS application to Intuit; the end user's QuickBooks company is connected separately via the consent screen.
+
+### 1. Create an Intuit Developer app
+
+1. Sign in at [developer.intuit.com](https://developer.intuit.com)
+2. Go to **Dashboard → Create an app → QuickBooks Online and Payments**
+3. Under **Keys & credentials**, copy the **Client ID** and **Client Secret** from the **Production** tab
+4. Under **Redirect URIs**, add your callback URL:
+   - Development: `http://localhost:5000/api/quickbooks/callback`
+   - Production: `https://yourdomain.com/api/quickbooks/callback`
+
+> **Note:** Intuit requires an End User License Agreement URL and Privacy Policy URL when creating the app. For a private internal deployment, links to your client's existing website policies are sufficient. The app does not need to pass Intuit's review process to function — development mode supports up to 25 connected companies.
+
+### 2. Configure BOS
+
+Add the credentials via environment variables or `appsettings.Local.json`:
+
+```env
+QuickBooks__ClientId=your-intuit-client-id
+QuickBooks__ClientSecret=your-intuit-client-secret
+QuickBooks__RedirectUri=https://yourdomain.com/api/quickbooks/callback
+```
+
+### 3. Connect the QuickBooks company
+
+1. Start BOS and sign in
+2. Go to **Settings → QuickBooks**
+3. Click **Connect QuickBooks** — you will be redirected to Intuit's consent page
+4. Sign in with the QuickBooks Online account that owns the company data and click **Authorize**
+5. BOS stores the access token; the Settings page will show **Connected**
+
+Once connected, purchase order statuses can be synced from any Project Detail page via the **Sync** or **Sync All** buttons on the Purchase Orders tab.
 
 ---
 

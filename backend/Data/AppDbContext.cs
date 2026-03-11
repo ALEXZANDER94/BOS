@@ -20,6 +20,15 @@ public class AppDbContext : DbContext
     public DbSet<ProjectContact> ProjectContacts => Set<ProjectContact>();
     public DbSet<ActivityLog>    ActivityLogs    => Set<ActivityLog>();
 
+    // Project hierarchy
+    public DbSet<Building>      Buildings      => Set<Building>();
+    public DbSet<Lot>           Lots           => Set<Lot>();
+    public DbSet<Address>       Addresses      => Set<Address>();
+    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+
+    // QuickBooks integration
+    public DbSet<QuickBooksToken> QuickBooksTokens => Set<QuickBooksToken>();
+
     // Gmail integration
     public DbSet<UserGoogleToken>     UserGoogleTokens     => Set<UserGoogleToken>();
     public DbSet<EmailCategory>       EmailCategories      => Set<EmailCategory>();
@@ -238,6 +247,98 @@ public class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(e => e.MessageId);
+        });
+
+        // ── Building ─────────────────────────────────────────────────────────────
+        modelBuilder.Entity<Building>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ProjectId).HasColumnName("project_id");
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.HasIndex(e => e.ProjectId);
+
+            entity.HasOne(e => e.Project)
+                  .WithMany()
+                  .HasForeignKey(e => e.ProjectId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── Lot ───────────────────────────────────────────────────────────────────
+        modelBuilder.Entity<Lot>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.BuildingId).HasColumnName("building_id");
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.HasIndex(e => e.BuildingId);
+
+            entity.HasOne(e => e.Building)
+                  .WithMany(b => b.Lots)
+                  .HasForeignKey(e => e.BuildingId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── Address ───────────────────────────────────────────────────────────────
+        modelBuilder.Entity<Address>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.LotId).HasColumnName("lot_id");
+            entity.Property(e => e.Address1).HasColumnName("address_1");
+            entity.Property(e => e.Address2).HasColumnName("address_2");
+            entity.Property(e => e.City).HasColumnName("city");
+            entity.Property(e => e.State).HasColumnName("state");
+            entity.Property(e => e.Zip).HasColumnName("zip");
+            entity.Property(e => e.Country).HasColumnName("country");
+            // 1:1 — each lot has at most one address
+            entity.HasIndex(e => e.LotId).IsUnique();
+
+            entity.HasOne(e => e.Lot)
+                  .WithOne(l => l.Address)
+                  .HasForeignKey<Address>(e => e.LotId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── PurchaseOrder ─────────────────────────────────────────────────────────
+        modelBuilder.Entity<PurchaseOrder>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ProjectId).HasColumnName("project_id");
+            entity.Property(e => e.LotId).HasColumnName("lot_id");
+            entity.Property(e => e.OrderNumber).HasColumnName("order_number").IsRequired();
+            entity.Property(e => e.Amount).HasColumnName("amount").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue("Open");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.HasIndex(e => e.ProjectId);
+
+            entity.HasOne(e => e.Project)
+                  .WithMany()
+                  .HasForeignKey(e => e.ProjectId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict: can't delete a lot that still has purchase orders
+            entity.HasOne(e => e.Lot)
+                  .WithMany(l => l.PurchaseOrders)
+                  .HasForeignKey(e => e.LotId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── QuickBooksToken ───────────────────────────────────────────────────────
+        modelBuilder.Entity<QuickBooksToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AccessToken).HasColumnName("access_token").IsRequired();
+            entity.Property(e => e.RefreshToken).HasColumnName("refresh_token").IsRequired();
+            entity.Property(e => e.RealmId).HasColumnName("realm_id").IsRequired();
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
         });
 
         // ── GlossaryUnit ────────────────────────────────────────────────────────

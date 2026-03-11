@@ -10,6 +10,7 @@ import SettingsPage from '@/pages/SettingsPage'
 import ClientsPage from '@/pages/ClientsPage'
 import ClientDetailPage from '@/pages/ClientDetailPage'
 import ProjectsPage from '@/pages/ProjectsPage'
+import ProjectDetailPage from '@/pages/ProjectDetailPage'
 import EmailsPage from '@/pages/EmailsPage'
 
 interface User {
@@ -51,7 +52,8 @@ export default function App() {
         <Route path="/comparison" element={<ComparisonPage />} />
         <Route path="/clients"     element={<ClientsPage />} />
         <Route path="/clients/:id" element={<ClientDetailPage />} />
-        <Route path="/projects"    element={<ProjectsPage />} />
+        <Route path="/projects"     element={<ProjectsPage />} />
+        <Route path="/projects/:id" element={<ProjectDetailPage />} />
         <Route path="/emails"      element={<EmailsPage />} />
         <Route path="/settings"    element={<SettingsPage />} />
       </Routes>

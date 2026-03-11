@@ -18,4 +18,12 @@ public class AllProjectsController : ControllerBase
         [FromQuery] string? status,
         [FromQuery] int?    clientId)
         => Ok(await _projects.GetAllProjectsAsync(search, status, clientId));
+
+    // GET /api/project/7
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var detail = await _projects.GetByIdAsync(id);
+        return detail is null ? NotFound() : Ok(detail);
+    }
 }

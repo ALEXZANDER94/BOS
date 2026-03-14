@@ -207,6 +207,7 @@ Google__ServiceAccountAdminEmail=admin@yourdomain.com
 QuickBooks__ClientId=your-intuit-client-id
 QuickBooks__ClientSecret=your-intuit-client-secret
 QuickBooks__RedirectUri=https://yourdomain.com/api/quickbooks/callback
+QuickBooks__EncryptionKey=your-base64-32-byte-key
 ```
 
 Place the service account JSON key file at the path specified above and restrict permissions:
@@ -313,6 +314,7 @@ All configuration keys follow ASP.NET Core conventions. Environment variables us
 | `QuickBooks:ClientId` | Intuit app Client ID | For QB sync |
 | `QuickBooks:ClientSecret` | Intuit app Client Secret | For QB sync |
 | `QuickBooks:RedirectUri` | OAuth callback URI registered in the Intuit Developer Console | For QB sync |
+| `QuickBooks:EncryptionKey` | Base64-encoded 32-byte AES-256 key used to encrypt tokens at rest. Generate with `openssl rand -base64 32`. | For QB sync |
 
 ---
 
@@ -345,7 +347,16 @@ Add the credentials via environment variables or `appsettings.Local.json`:
 QuickBooks__ClientId=your-intuit-client-id
 QuickBooks__ClientSecret=your-intuit-client-secret
 QuickBooks__RedirectUri=https://yourdomain.com/api/quickbooks/callback
+QuickBooks__EncryptionKey=your-base64-encoded-32-byte-key
 ```
+
+Generate the encryption key once on the server and keep it safe — if it is lost, you will need to disconnect and reconnect QuickBooks:
+
+```bash
+openssl rand -base64 32
+```
+
+The access token, refresh token, and realm ID are encrypted at rest using AES-256-GCM before being written to the database. The encryption key is never stored in the database or source code.
 
 ### 3. Connect the QuickBooks company
 
@@ -356,6 +367,23 @@ QuickBooks__RedirectUri=https://yourdomain.com/api/quickbooks/callback
 5. BOS stores the access token; the Settings page will show **Connected**
 
 Once connected, purchase order statuses can be synced from any Project Detail page via the **Sync** or **Sync All** buttons on the Purchase Orders tab.
+
+### Viewing QuickBooks logs
+
+All QuickBooks API activity is logged at `Debug` level and above under the category `BOS.Backend.Services.QuickBooksService`. On a production server running under systemd:
+
+```bash
+# All QuickBooks log entries
+journalctl -u bos --no-pager | grep QuickBooksService
+
+# Live tail — useful when debugging a sync in real time
+journalctl -u bos -f | grep QuickBooksService
+
+# Errors and above only
+journalctl -u bos -p err
+```
+
+Sensitive values (access tokens, refresh tokens, client secret) are never written to the log. Logged information includes: authorization URL generation, token exchange and refresh outcomes (with HTTP status codes and response bodies on failure), PO query results, and disconnect events.
 
 ---
 

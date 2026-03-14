@@ -138,13 +138,25 @@ function EmailRow({
           </Badge>
         )}
         {assignment && (
-          <Badge
-            className="text-[10px] h-4 px-1.5 border-none"
-            style={{ backgroundColor: assignment.categoryColor, color: '#fff' }}
-          >
-            {assignment.categoryName}
-            {assignment.statusName && ` · ${assignment.statusName}`}
-          </Badge>
+          <>
+            <Badge
+              className="text-[10px] h-4 px-1.5 border-none"
+              style={{ backgroundColor: assignment.categoryColor, color: '#fff' }}
+            >
+              {assignment.categoryName}
+            </Badge>
+            {assignment.statusName && (
+              <Badge
+                className="text-[10px] h-4 px-1.5 border-none"
+                style={{
+                  backgroundColor: assignment.statusColor ?? assignment.categoryColor,
+                  color: '#fff',
+                }}
+              >
+                {assignment.statusName}
+              </Badge>
+            )}
+          </>
         )}
         {noteCount != null && noteCount > 0 && (
           <span className="text-xs text-muted-foreground">
@@ -300,6 +312,7 @@ function EmailDetailPanel({
 export default function EmailsPage() {
   const [searchParams, setSearchParams]           = useSearchParams()
   const [filter, setFilter]                       = useState<EmailFilter>({ type: 'all' })
+  const [selectedStatusId, setSelectedStatusId]   = useState<number | null>(null)
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
   const [searchInput, setSearchInput]             = useState('')
   const [search, setSearch]                       = useState('')
@@ -348,14 +361,14 @@ export default function EmailsPage() {
   const refresh = useRefreshEmails(filter, search || undefined)
 
   // Unified email list depending on active filter
-  const emails: EmailSummary[] = filter.type === 'category'
+  const allEmails: EmailSummary[] = filter.type === 'category'
     ? (categoryData?.emails ?? [])
     : (gmailData?.pages.flatMap(p => p.emails) ?? [])
 
   const isLoading = filter.type === 'category' ? categoryLoading : gmailLoading
 
   // Batch-load assignments to decorate each row
-  const messageIds = useMemo(() => emails.map(e => e.messageId), [emails])
+  const messageIds = useMemo(() => allEmails.map(e => e.messageId), [allEmails])
   const { data: batchAssignments = [] } = useEmailAssignmentsBatch(messageIds)
 
   // Pre-build a messageId → assignment map for O(1) lookup
@@ -381,6 +394,11 @@ export default function EmailsPage() {
     ? categoryAssignmentMap
     : assignmentMap
 
+  // Apply status sub-filter (only when viewing a category)
+  const emails: EmailSummary[] = filter.type === 'category' && selectedStatusId !== null
+    ? allEmails.filter(e => effectiveAssignmentMap[e.messageId]?.statusId === selectedStatusId)
+    : allEmails
+
   const lastFetched = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null
@@ -390,6 +408,7 @@ export default function EmailsPage() {
 
   function selectFilter(f: EmailFilter) {
     setFilter(f)
+    setSelectedStatusId(null)
     setSelectedMessageId(null)
     setSearchInput('')
   }
@@ -514,6 +533,39 @@ export default function EmailsPage() {
             ))
           )}
         </nav>
+
+        {/* Status sub-filter — shown when a category with statuses is selected */}
+        {filter.type === 'category' && (() => {
+          const activeCat = categories.find(c => c.id === filter.id)
+          if (!activeCat || activeCat.statuses.length === 0) return null
+          return (
+            <>
+              <div className="px-3 py-2 border-b border-border">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Status
+                </p>
+              </div>
+              <nav className="p-2 space-y-0.5 border-b border-border">
+                <SidebarBtn
+                  active={selectedStatusId === null}
+                  onClick={() => { setSelectedStatusId(null); setSelectedMessageId(null) }}
+                >
+                  All
+                </SidebarBtn>
+                {activeCat.statuses.map(s => (
+                  <SidebarBtn
+                    key={s.id}
+                    active={selectedStatusId === s.id}
+                    onClick={() => { setSelectedStatusId(s.id); setSelectedMessageId(null) }}
+                    dot={s.color}
+                  >
+                    {s.name}
+                  </SidebarBtn>
+                ))}
+              </nav>
+            </>
+          )
+        })()}
 
         {/* Clients */}
         <div className="px-3 py-3 border-b border-border">

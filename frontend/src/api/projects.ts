@@ -29,16 +29,17 @@ export interface Building {
 }
 
 export interface PurchaseOrder {
-  id:           number
-  projectId:    number
-  lotId:        number
-  lotName:      string
-  buildingName: string
-  orderNumber:  string
-  amount:       number
-  status:       string
-  createdAt:    string
-  updatedAt:    string
+  id:            number
+  projectId:     number
+  lotId:         number
+  lotName:       string
+  buildingName:  string
+  orderNumber:   string
+  invoiceNumber: string | null
+  amount:        number
+  status:        string
+  createdAt:     string
+  updatedAt:     string
 }
 
 export interface AssignedContact {
@@ -91,6 +92,21 @@ export interface UpsertAddressRequest {
 
 export interface CreatePurchaseOrderRequest { lotId: number; orderNumber: string; amount: number }
 export interface UpdatePurchaseOrderRequest { orderNumber: string; amount: number }
+
+export interface PoCsvRowError {
+  rowNumber:   number
+  orderNumber: string
+  reason:      string
+}
+
+export interface PoCsvImportResult {
+  importedCount:    number
+  skippedCount:     number
+  errorCount:       number
+  buildingsCreated: number
+  lotsCreated:      number
+  errors:           PoCsvRowError[]
+}
 
 // ── API objects ───────────────────────────────────────────────────────────────
 
@@ -148,6 +164,16 @@ export const purchaseOrderApi = {
 
   syncAll: (projectId: number) =>
     axios.post<PurchaseOrder[]>(`/api/project/${projectId}/purchase-order/sync-all`).then(r => r.data),
+
+  importFromCsv: (projectId: number, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return axios.post<PoCsvImportResult>(
+      `/api/project/${projectId}/purchase-order/import`,
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    ).then(r => r.data)
+  },
 }
 
 export const quickBooksApi = {

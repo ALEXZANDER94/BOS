@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Pencil, Trash2, Globe, MapPin, Mail, MailOpen, RefreshCw, Inbox } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2, Globe, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -10,151 +10,6 @@ import ActivityPanel from '@/components/clients/ActivityPanel'
 import EditClientModal from '@/components/clients/EditClientModal'
 import DeleteClientModal from '@/components/clients/DeleteClientModal'
 import { useClient } from '@/hooks/useClients'
-import { useEmails, useEmailDetail, useRefreshEmails } from '@/hooks/useGmail'
-import { cn } from '@/lib/utils'
-import type { EmailSummary } from '@/api/gmail'
-
-// ── Inline emails components (scoped to this page) ───────────────────────────
-
-function formatDate(iso: string) {
-  const d = new Date(iso)
-  const now = new Date()
-  if (d.toDateString() === now.toDateString())
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
-
-function EmailDetailPanel({ messageId }: { messageId: string }) {
-  const { data: detail, isLoading } = useEmailDetail(messageId)
-
-  if (isLoading)
-    return <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
-  if (!detail)
-    return <p className="text-sm text-muted-foreground py-6 text-center">Could not load email.</p>
-
-  return (
-    <div className="rounded-lg border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b space-y-1">
-        <p className="font-medium text-sm">{detail.subject}</p>
-        <div className="text-xs text-muted-foreground space-y-0.5">
-          <p><span className="font-medium text-foreground">From:</span>{' '}
-            {detail.fromName ? `${detail.fromName} <${detail.fromAddress}>` : detail.fromAddress}
-          </p>
-          <p><span className="font-medium text-foreground">To:</span> {detail.toAddresses}</p>
-          {detail.ccAddresses && (
-            <p><span className="font-medium text-foreground">Cc:</span> {detail.ccAddresses}</p>
-          )}
-          <p><span className="font-medium text-foreground">Date:</span>{' '}
-            {new Date(detail.receivedAt).toLocaleString()}
-          </p>
-        </div>
-      </div>
-      <div className="px-4 py-3 max-h-96 overflow-auto">
-        {detail.bodyHtml ? (
-          <iframe
-            srcDoc={detail.bodyHtml}
-            sandbox="allow-same-origin"
-            className="w-full h-72 border-none"
-            title="Email body"
-          />
-        ) : detail.bodyText ? (
-          <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-            {detail.bodyText}
-          </pre>
-        ) : (
-          <p className="text-sm text-muted-foreground">No body content.</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ClientEmailsTab({ clientId }: { clientId: number }) {
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
-  const { data, isLoading, dataUpdatedAt } = useEmails({ type: 'client', id: clientId })
-  const refresh = useRefreshEmails({ type: 'client', id: clientId })
-  const emails: EmailSummary[] = data?.pages.flatMap(p => p.emails) ?? []
-
-  const lastFetched = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : null
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {lastFetched ? `Updated ${lastFetched}` : 'Showing emails matching this client'}
-        </div>
-        <Button variant="ghost" size="sm" onClick={() => refresh()}>
-          <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', isLoading && 'animate-spin')} />
-          Refresh
-        </Button>
-      </div>
-
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
-      ) : emails.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-12 rounded-lg border border-dashed">
-          <Inbox className="h-6 w-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">No emails found for this client.</p>
-          <p className="text-xs text-muted-foreground">
-            Make sure the client has a domain or contact emails configured.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="rounded-lg border overflow-hidden divide-y divide-border">
-            {emails.map(email => (
-              <button
-                key={email.messageId}
-                onClick={() =>
-                  setSelectedMessageId(prev =>
-                    prev === email.messageId ? null : email.messageId
-                  )
-                }
-                className={cn(
-                  'w-full text-left px-4 py-3 transition-colors',
-                  selectedMessageId === email.messageId ? 'bg-accent' : 'hover:bg-muted/50',
-                  !email.isRead && 'bg-blue-50/40 dark:bg-blue-950/20'
-                )}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className={cn('text-sm truncate', !email.isRead && 'font-semibold')}>
-                    {email.fromName || email.fromAddress}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground shrink-0">
-                    {formatDate(email.receivedAt)}
-                  </span>
-                </div>
-                <p className={cn('text-sm truncate', !email.isRead ? 'font-medium' : 'text-muted-foreground')}>
-                  {email.subject}
-                </p>
-                <p className="text-xs text-muted-foreground truncate mt-0.5">
-                  {email.snippet}
-                </p>
-              </button>
-            ))}
-          </div>
-
-          <div className="text-[11px] text-muted-foreground flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <Mail className="h-3 w-3" />
-              {emails.filter(e => !e.isRead).length} unread
-            </span>
-            <span className="flex items-center gap-1">
-              <MailOpen className="h-3 w-3" />
-              {emails.length} shown
-            </span>
-          </div>
-
-          {selectedMessageId && (
-            <EmailDetailPanel messageId={selectedMessageId} />
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -314,7 +169,6 @@ export default function ClientDetailPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="emails">Emails</TabsTrigger>
         </TabsList>
 
         <TabsContent value="contacts" className="mt-5 max-w-2xl">
@@ -325,9 +179,6 @@ export default function ClientDetailPage() {
         </TabsContent>
         <TabsContent value="activity" className="mt-5 max-w-2xl">
           <ActivityPanel clientId={client.id} />
-        </TabsContent>
-        <TabsContent value="emails" className="mt-5 max-w-2xl">
-          <ClientEmailsTab clientId={client.id} />
         </TabsContent>
       </Tabs>
 

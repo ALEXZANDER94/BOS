@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using BOS.Backend.Services;
 
@@ -21,9 +22,20 @@ public class AllProjectsController : ControllerBase
 
     // GET /api/project/7
     [HttpGet("{id:int}")]
+    [Authorize]
     public async Task<IActionResult> GetById(int id)
     {
-        var detail = await _projects.GetByIdAsync(id);
-        return detail is null ? NotFound() : Ok(detail);
+        try
+        {
+            var detail = await _projects.GetByIdAsync(id);
+            return detail is null ? NotFound() : Ok(detail);
+        }
+        catch (Exception ex)
+        {
+            var logger = HttpContext.RequestServices
+                .GetRequiredService<ILogger<AllProjectsController>>();
+            logger.LogError(ex, "Failed to load project detail for ProjectId={ProjectId}", id);
+            return StatusCode(500, new { message = "Failed to load project details." });
+        }
     }
 }

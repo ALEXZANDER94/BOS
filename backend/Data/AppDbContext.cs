@@ -310,6 +310,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.ProjectId).HasColumnName("project_id");
             entity.Property(e => e.LotId).HasColumnName("lot_id");
             entity.Property(e => e.OrderNumber).HasColumnName("order_number").IsRequired();
+            entity.Property(e => e.InvoiceNumber).HasColumnName("invoice_number").IsRequired(false);
             entity.Property(e => e.Amount).HasColumnName("amount").HasColumnType("decimal(18,2)");
             entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue("Open");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");

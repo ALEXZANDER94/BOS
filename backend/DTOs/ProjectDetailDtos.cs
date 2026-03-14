@@ -52,6 +52,7 @@ public record PurchaseOrderDto(
     string   LotName,
     string   BuildingName,
     string   OrderNumber,
+    string?  InvoiceNumber,
     decimal  Amount,
     string   Status,
     DateTime CreatedAt,
@@ -89,3 +90,15 @@ public record AssignedContactDto(
 // ── QuickBooks ────────────────────────────────────────────────────────────────
 
 public record QuickBooksStatusDto(bool Connected, string? RealmId);
+
+// ── PO CSV Import ─────────────────────────────────────────────────────────────
+
+public record PoCsvRowError(int RowNumber, string OrderNumber, string Reason);
+
+public record PoCsvImportResultDto(
+    int ImportedCount,
+    int SkippedCount,
+    int ErrorCount,
+    int BuildingsCreated,
+    int LotsCreated,
+    List<PoCsvRowError> Errors);

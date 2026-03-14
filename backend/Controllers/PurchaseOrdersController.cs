@@ -15,11 +15,13 @@ public class PurchaseOrdersController : ControllerBase
 {
     private readonly AppDbContext        _db;
     private readonly IQuickBooksService  _qb;
+    private readonly IProjectService     _projects;
 
-    public PurchaseOrdersController(AppDbContext db, IQuickBooksService qb)
+    public PurchaseOrdersController(AppDbContext db, IQuickBooksService qb, IProjectService projects)
     {
-        _db = db;
-        _qb = qb;
+        _db       = db;
+        _qb       = qb;
+        _projects = projects;
     }
 
     // GET /api/project/1/purchase-order
@@ -114,8 +116,10 @@ public class PurchaseOrdersController : ControllerBase
 
         if (po is null) return NotFound();
 
-        po.Status    = await _qb.GetPoStatusAsync(po.OrderNumber);
-        po.UpdatedAt = DateTime.UtcNow;
+        var result       = await _qb.GetPoStatusAsync(po.OrderNumber);
+        po.Status        = result.Status;
+        po.InvoiceNumber = result.InvoiceNumber;
+        po.UpdatedAt     = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
         return Ok(ToDto(po));
@@ -130,14 +134,42 @@ public class PurchaseOrdersController : ControllerBase
             .Include(po => po.Lot).ThenInclude(l => l!.Building)
             .ToListAsync();
 
+        var orderNumbers = pos.Select(po => po.OrderNumber);
+        var results      = await _qb.GetBatchPoStatusAsync(orderNumbers);
+        var now          = DateTime.UtcNow;
+
         foreach (var po in pos)
         {
-            po.Status    = await _qb.GetPoStatusAsync(po.OrderNumber);
-            po.UpdatedAt = DateTime.UtcNow;
+            if (results.TryGetValue(po.OrderNumber, out var r))
+            {
+                po.Status        = r.Status;
+                po.InvoiceNumber = r.InvoiceNumber;
+                po.UpdatedAt     = now;
+            }
         }
 
         await _db.SaveChangesAsync();
         return Ok(pos.Select(ToDto));
+    }
+
+    // POST /api/project/1/purchase-order/import
+    [HttpPost("import")]
+    public async Task<IActionResult> Import(int projectId, IFormFile? file)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "No file provided." });
+
+        if (!file.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "File must be a CSV." });
+
+        if (file.Length > 5 * 1024 * 1024)
+            return BadRequest(new { message = "File exceeds the 5 MB limit." });
+
+        var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId);
+        if (!projectExists) return NotFound(new { message = "Project not found." });
+
+        var result = await _projects.ImportPurchaseOrdersAsync(projectId, file);
+        return Ok(result);
     }
 
     // ── Mapping ───────────────────────────────────────────────────────────────
@@ -146,9 +178,10 @@ public class PurchaseOrdersController : ControllerBase
         po.Id,
         po.ProjectId,
         po.LotId,
-        po.Lot?.Name         ?? "",
+        po.Lot?.Name           ?? "",
         po.Lot?.Building?.Name ?? "",
         po.OrderNumber,
+        po.InvoiceNumber,
         po.Amount,
         po.Status,
         po.CreatedAt,

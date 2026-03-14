@@ -1,3 +1,7 @@
+using System.Globalization;
+using CsvHelper;
+using CsvHelper.Configuration;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using BOS.Backend.Data;
 using BOS.Backend.DTOs;
@@ -15,6 +19,7 @@ public interface IProjectService
     Task<bool>                              DeleteAsync(int clientId, int id);
     Task                                    AssignContactAsync(int clientId, int projectId, int contactId);
     Task                                    UnassignContactAsync(int clientId, int projectId, int contactId);
+    Task<PoCsvImportResultDto>              ImportPurchaseOrdersAsync(int projectId, IFormFile file);
 }
 
 public class ProjectService : IProjectService
@@ -45,11 +50,15 @@ public class ProjectService : IProjectService
         if (project is null) return null;
 
         var buildingCount = await _db.Buildings.CountAsync(b => b.ProjectId == id);
-        var lotCount      = await _db.Lots.CountAsync(l => l.Building!.ProjectId == id);
+        var buildingIds   = await _db.Buildings
+            .Where(b => b.ProjectId == id)
+            .Select(b => b.Id)
+            .ToListAsync();
+        var lotCount      = await _db.Lots.CountAsync(l => buildingIds.Contains(l.BuildingId));
         var poCount       = await _db.PurchaseOrders.CountAsync(po => po.ProjectId == id);
-        var totalAmount   = await _db.PurchaseOrders
+        var totalAmount   = (decimal)(await _db.PurchaseOrders
             .Where(po => po.ProjectId == id)
-            .SumAsync(po => (decimal?)po.Amount) ?? 0m;
+            .SumAsync(po => (double?)po.Amount) ?? 0.0);
 
         return new ProjectDetailDto(
             project.Id,
@@ -190,6 +199,151 @@ public class ProjectService : IProjectService
             _db.ProjectContacts.Remove(pc);
             await _db.SaveChangesAsync();
         }
+    }
+
+    public async Task<PoCsvImportResultDto> ImportPurchaseOrdersAsync(int projectId, IFormFile file)
+    {
+        var errors           = new List<PoCsvRowError>();
+        int importedCount    = 0;
+        int skippedCount     = 0;
+        int buildingsCreated = 0;
+        int lotsCreated      = 0;
+
+        // Load existing buildings + lots for this project into memory
+        var buildings = await _db.Buildings
+            .Where(b => b.ProjectId == projectId)
+            .Include(b => b.Lots)
+            .ToListAsync();
+
+        // Load existing PO order numbers to detect duplicates
+        var existingOrderNumbers = (await _db.PurchaseOrders
+            .Where(po => po.ProjectId == projectId)
+            .Select(po => po.OrderNumber.ToLower())
+            .ToListAsync()).ToHashSet();
+
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+        {
+            HasHeaderRecord  = true,
+            TrimOptions      = TrimOptions.Trim,
+            MissingFieldFound = null,
+        };
+
+        using var reader = new StreamReader(file.OpenReadStream());
+        using var csv    = new CsvReader(reader, config);
+
+        await csv.ReadAsync();
+        csv.ReadHeader();
+
+        int rowNumber = 0;
+        var now       = DateTime.UtcNow;
+
+        while (await csv.ReadAsync())
+        {
+            rowNumber++;
+
+            var orderNumber  = csv.GetField("OrderNumber")?.Trim()  ?? "";
+            var buildingName = csv.GetField("BuildingName")?.Trim() ?? "";
+            var lotName      = csv.GetField("LotName")?.Trim()      ?? "";
+            var amountRaw    = csv.GetField("Amount")?.Trim()        ?? "";
+            var statusRaw    = csv.GetField("Status")?.Trim()        ?? "";
+
+            // Skip completely blank rows
+            if (string.IsNullOrEmpty(orderNumber) && string.IsNullOrEmpty(buildingName) &&
+                string.IsNullOrEmpty(lotName)     && string.IsNullOrEmpty(amountRaw))
+                continue;
+
+            // Validate required fields
+            if (string.IsNullOrEmpty(orderNumber))
+            {
+                errors.Add(new PoCsvRowError(rowNumber, "", "Order number is required."));
+                continue;
+            }
+            if (string.IsNullOrEmpty(buildingName))
+            {
+                errors.Add(new PoCsvRowError(rowNumber, orderNumber, "Building name is required."));
+                continue;
+            }
+            if (string.IsNullOrEmpty(lotName))
+            {
+                errors.Add(new PoCsvRowError(rowNumber, orderNumber, "Lot name is required."));
+                continue;
+            }
+            if (!decimal.TryParse(amountRaw, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount) || amount < 0)
+            {
+                errors.Add(new PoCsvRowError(rowNumber, orderNumber, "Amount must be a non-negative number."));
+                continue;
+            }
+
+            var status = string.IsNullOrEmpty(statusRaw) ? "Open" : statusRaw;
+            if (status != "Open" && status != "Closed")
+            {
+                errors.Add(new PoCsvRowError(rowNumber, orderNumber, $"Invalid status '{status}'. Must be Open or Closed."));
+                continue;
+            }
+
+            // Skip duplicate order number
+            if (existingOrderNumbers.Contains(orderNumber.ToLower()))
+            {
+                skippedCount++;
+                errors.Add(new PoCsvRowError(rowNumber, orderNumber, "Order number already exists — skipped."));
+                continue;
+            }
+
+            // Resolve or create building
+            var building = buildings.FirstOrDefault(b =>
+                string.Equals(b.Name, buildingName, StringComparison.OrdinalIgnoreCase));
+
+            if (building is null)
+            {
+                building = new Building
+                {
+                    ProjectId   = projectId,
+                    Name        = buildingName,
+                    Description = "",
+                    Lots        = new List<Lot>(),
+                };
+                _db.Buildings.Add(building);
+                await _db.SaveChangesAsync();
+                buildings.Add(building);
+                buildingsCreated++;
+            }
+
+            // Resolve or create lot
+            var lot = building.Lots.FirstOrDefault(l =>
+                string.Equals(l.Name, lotName, StringComparison.OrdinalIgnoreCase));
+
+            if (lot is null)
+            {
+                lot = new Lot
+                {
+                    BuildingId  = building.Id,
+                    Name        = lotName,
+                    Description = "",
+                };
+                _db.Lots.Add(lot);
+                await _db.SaveChangesAsync();
+                building.Lots.Add(lot);
+                lotsCreated++;
+            }
+
+            _db.PurchaseOrders.Add(new PurchaseOrder
+            {
+                ProjectId   = projectId,
+                LotId       = lot.Id,
+                OrderNumber = orderNumber,
+                Amount      = amount,
+                Status      = status,
+                CreatedAt   = now,
+                UpdatedAt   = now,
+            });
+
+            existingOrderNumbers.Add(orderNumber.ToLower());
+            importedCount++;
+        }
+
+        await _db.SaveChangesAsync();
+
+        return new PoCsvImportResultDto(importedCount, skippedCount, errors.Count(e => !e.Reason.Contains("skipped")), buildingsCreated, lotsCreated, errors);
     }
 
     private static ProjectDto ToDto(Project p) => new(

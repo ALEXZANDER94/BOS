@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Building2, ChevronDown, ChevronRight,
   MapPin, Pencil, Plus, RefreshCw, Trash2, X, Check,
-  CheckCircle2, AlertCircle,
+  CheckCircle2, AlertCircle, Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -38,6 +38,7 @@ import {
   type UpsertAddressRequest,
   type CreatePurchaseOrderRequest,
 } from '@/api/projects'
+import ImportPoModal from '@/components/projects/ImportPoModal'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -507,7 +508,8 @@ function AddPoDialog({
 
 function PurchaseOrdersTab({ projectId }: { projectId: number }) {
   const qc            = useQueryClient()
-  const [addOpen, setAddOpen] = useState(false)
+  const [addOpen,    setAddOpen]    = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editingPo,  setEditingPo]  = useState<PurchaseOrder | null>(null)
   const [editNumber, setEditNumber] = useState('')
   const [editAmount, setEditAmount] = useState('')
@@ -586,6 +588,9 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
             <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${syncAllMut.isPending ? 'animate-spin' : ''}`} />
             Sync All
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+            <Upload className="h-3.5 w-3.5 mr-1.5" /> Import CSV
+          </Button>
           <Button size="sm" onClick={() => setAddOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add PO
           </Button>
@@ -612,6 +617,7 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Order #</TableHead>
+                <TableHead>Invoice #</TableHead>
                 <TableHead>Building</TableHead>
                 <TableHead>Lot</TableHead>
                 <TableHead>Amount</TableHead>
@@ -633,6 +639,7 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
                           autoFocus
                         />
                       </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{po.invoiceNumber ?? '—'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{po.buildingName}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{po.lotName}</TableCell>
                       <TableCell>
@@ -675,6 +682,7 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
                   ) : (
                     <>
                       <TableCell className="font-medium text-sm">{po.orderNumber}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{po.invoiceNumber ?? '—'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{po.buildingName}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{po.lotName}</TableCell>
                       <TableCell className="text-sm">{fmtCurrency(po.amount)}</TableCell>
@@ -731,6 +739,13 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
             qc.invalidateQueries({ queryKey: ['purchase-orders', projectId] })
             qc.invalidateQueries({ queryKey: ['project-detail', projectId] })
           }}
+        />
+      )}
+
+      {importOpen && (
+        <ImportPoModal
+          projectId={projectId}
+          onClose={() => setImportOpen(false)}
         />
       )}
     </div>

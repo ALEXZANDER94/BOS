@@ -4,8 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Building2, ChevronDown, ChevronRight,
   MapPin, Pencil, Plus, RefreshCw, Trash2, X, Check,
-  CheckCircle2, AlertCircle, Upload,
+  CheckCircle2, AlertCircle, Upload, Settings2,
+  ChevronsUpDown, Download,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -31,14 +33,16 @@ import {
   buildingApi,
   lotApi,
   purchaseOrderApi,
+  purchaseOrderStatusApi,
   quickBooksApi,
   type Building,
   type Lot,
   type PurchaseOrder,
+  type PurchaseOrderStatus,
   type UpsertAddressRequest,
-  type CreatePurchaseOrderRequest,
 } from '@/api/projects'
 import ImportPoModal from '@/components/projects/ImportPoModal'
+import ManagePoStatusesDialog from '@/components/projects/ManagePoStatusesDialog'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -49,11 +53,13 @@ const STATUS_COLORS: Record<string, string> = {
   Cancelled: 'bg-red-100   text-red-800   border-red-300   dark:bg-red-950/40   dark:text-red-400',
 }
 
-const PO_STATUS_COLORS: Record<string, string> = {
-  Open:    'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400',
-  Closed:  'bg-green-100 text-green-800 border-green-300 dark:bg-green-950/40 dark:text-green-400',
-  Unknown: 'bg-muted text-muted-foreground border-border',
+const QB_STATUS_COLORS: Record<string, string> = {
+  Unpaid:      'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400',
+  Paid:        'bg-green-100 text-green-800 border-green-300 dark:bg-green-950/40 dark:text-green-400',
+  'Not Found': 'bg-muted text-muted-foreground border-border',
 }
+
+const QB_STATUSES = ['Unpaid', 'Paid', 'Not Found'] as const
 
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return '—'
@@ -258,13 +264,16 @@ function LotRow({
 function BuildingCard({
   building,
   projectId,
+  expanded,
+  onToggle,
   onChanged,
 }: {
   building:  Building
   projectId: number
+  expanded:  boolean
+  onToggle:  () => void
   onChanged: () => void
 }) {
-  const [expanded,     setExpanded]     = useState(true)
   const [editingName,  setEditingName]  = useState(false)
   const [addingLot,    setAddingLot]    = useState(false)
   const [name,         setName]         = useState(building.name)
@@ -295,7 +304,7 @@ function BuildingCard({
       {/* Building header */}
       <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b border-border">
         <button
-          onClick={() => setExpanded(v => !v)}
+          onClick={onToggle}
           className="p-0.5 rounded text-muted-foreground hover:text-foreground"
         >
           {expanded
@@ -398,6 +407,8 @@ function BuildingCard({
 
 // ── Add PO dialog ─────────────────────────────────────────────────────────────
 
+const NEW_SENTINEL = '__new__'
+
 function AddPoDialog({
   projectId,
   buildings,
@@ -409,21 +420,75 @@ function AddPoDialog({
   onClose:   () => void
   onCreated: () => void
 }) {
-  const [selectedBuildingId, setSelectedBuildingId] = useState<number | ''>('')
-  const [selectedLotId,      setSelectedLotId]      = useState<number | ''>('')
-  const [orderNumber,        setOrderNumber]         = useState('')
-  const [amount,             setAmount]              = useState('')
+  const qc = useQueryClient()
 
-  const selectedBuilding = buildings.find(b => b.id === selectedBuildingId)
+  // Building selection: existing id (as string), '__new__', or ''
+  const [buildingValue,   setBuildingValue]   = useState('')
+  const [newBuildingName, setNewBuildingName] = useState('')
+
+  // Lot selection
+  const [lotValue,        setLotValue]        = useState('')
+  const [newLotName,      setNewLotName]      = useState('')
+
+  const [orderNumber, setOrderNumber] = useState('')
+  const [amount,      setAmount]      = useState('')
+  const [submitting,  setSubmitting]  = useState(false)
+
+  const isNewBuilding    = buildingValue === NEW_SENTINEL
+  const selectedBuilding = buildings.find(b => b.id === Number(buildingValue))
   const lots             = selectedBuilding?.lots ?? []
+  const isNewLot         = lotValue === NEW_SENTINEL || isNewBuilding
 
-  const createMut = useMutation({
-    mutationFn: (data: CreatePurchaseOrderRequest) => purchaseOrderApi.create(projectId, data),
-    onSuccess:  () => { onCreated(); onClose() },
-    onError:    () => toast.error('Failed to create purchase order.'),
-  })
+  function handleBuildingChange(val: string) {
+    setBuildingValue(val)
+    setLotValue('')
+    setNewLotName('')
+    // If switching to new building, pre-select new lot mode
+    if (val === NEW_SENTINEL) setLotValue(NEW_SENTINEL)
+  }
 
-  const canSubmit = selectedLotId !== '' && orderNumber.trim() && amount !== '' && !Number.isNaN(Number(amount))
+  const canSubmit = (
+    (isNewBuilding ? newBuildingName.trim() : buildingValue !== '') &&
+    (isNewLot      ? newLotName.trim()      : lotValue !== '')      &&
+    orderNumber.trim() &&
+    amount !== '' && !Number.isNaN(Number(amount)) && Number(amount) >= 0
+  )
+
+  async function handleSubmit() {
+    setSubmitting(true)
+    try {
+      let resolvedBuildingId: number
+      let resolvedLotId:      number
+
+      if (isNewBuilding) {
+        const b = await buildingApi.create(projectId, { name: newBuildingName.trim(), description: '' })
+        resolvedBuildingId = b.id
+      } else {
+        resolvedBuildingId = Number(buildingValue)
+      }
+
+      if (isNewLot) {
+        const l = await lotApi.create(resolvedBuildingId, { name: newLotName.trim(), description: '' })
+        resolvedLotId = l.id
+      } else {
+        resolvedLotId = Number(lotValue)
+      }
+
+      await purchaseOrderApi.create(projectId, {
+        lotId:       resolvedLotId,
+        orderNumber: orderNumber.trim(),
+        amount:      Number(amount),
+      })
+
+      qc.invalidateQueries({ queryKey: ['buildings', projectId] })
+      onCreated()
+      onClose()
+    } catch {
+      toast.error('Failed to create purchase order.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -433,35 +498,70 @@ function AddPoDialog({
         </DialogHeader>
 
         <div className="space-y-3">
+          {/* Building */}
           <div>
             <Label className="text-sm">Building</Label>
             <select
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-              value={selectedBuildingId}
-              onChange={e => { setSelectedBuildingId(Number(e.target.value)); setSelectedLotId('') }}
+              value={buildingValue}
+              onChange={e => handleBuildingChange(e.target.value)}
             >
               <option value="">Select building…</option>
               {buildings.map(b => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
+              <option value={NEW_SENTINEL}>＋ New building…</option>
             </select>
+            {isNewBuilding && (
+              <Input
+                className="mt-1.5"
+                placeholder="Building name"
+                value={newBuildingName}
+                onChange={e => setNewBuildingName(e.target.value)}
+                autoFocus
+              />
+            )}
           </div>
 
+          {/* Lot */}
           <div>
             <Label className="text-sm">Lot</Label>
-            <select
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-              value={selectedLotId}
-              onChange={e => setSelectedLotId(Number(e.target.value))}
-              disabled={!selectedBuildingId}
-            >
-              <option value="">Select lot…</option>
-              {lots.map(l => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
+            {isNewBuilding ? (
+              // New building → can only create a new lot
+              <Input
+                className="mt-1"
+                placeholder="Lot name"
+                value={newLotName}
+                onChange={e => setNewLotName(e.target.value)}
+              />
+            ) : (
+              <>
+                <select
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  value={lotValue}
+                  onChange={e => { setLotValue(e.target.value); setNewLotName('') }}
+                  disabled={!buildingValue}
+                >
+                  <option value="">Select lot…</option>
+                  {lots.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                  {buildingValue && <option value={NEW_SENTINEL}>＋ New lot…</option>}
+                </select>
+                {lotValue === NEW_SENTINEL && (
+                  <Input
+                    className="mt-1.5"
+                    placeholder="Lot name"
+                    value={newLotName}
+                    onChange={e => setNewLotName(e.target.value)}
+                    autoFocus
+                  />
+                )}
+              </>
+            )}
           </div>
 
+          {/* Order Number */}
           <div>
             <Label className="text-sm">Order Number</Label>
             <Input
@@ -472,6 +572,7 @@ function AddPoDialog({
             />
           </div>
 
+          {/* Amount */}
           <div>
             <Label className="text-sm">Amount</Label>
             <Input
@@ -487,16 +588,9 @@ function AddPoDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button
-            disabled={!canSubmit || createMut.isPending}
-            onClick={() => createMut.mutate({
-              lotId:       Number(selectedLotId),
-              orderNumber: orderNumber.trim(),
-              amount:      Number(amount),
-            })}
-          >
-            Add
+          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button disabled={!canSubmit || submitting} onClick={handleSubmit}>
+            {submitting ? 'Creating…' : 'Add'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -508,11 +602,13 @@ function AddPoDialog({
 
 function PurchaseOrdersTab({ projectId }: { projectId: number }) {
   const qc            = useQueryClient()
-  const [addOpen,    setAddOpen]    = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
-  const [editingPo,  setEditingPo]  = useState<PurchaseOrder | null>(null)
-  const [editNumber, setEditNumber] = useState('')
-  const [editAmount, setEditAmount] = useState('')
+  const [addOpen,        setAddOpen]        = useState(false)
+  const [importOpen,     setImportOpen]     = useState(false)
+  const [manageStatuses, setManageStatuses] = useState(false)
+  const [statusFilters,  setStatusFilters]  = useState<string[]>([])
+  const [editingPo,      setEditingPo]      = useState<PurchaseOrder | null>(null)
+  const [editNumber,     setEditNumber]     = useState('')
+  const [editAmount,     setEditAmount]     = useState('')
 
   const { data: qbStatus } = useQuery({
     queryKey: ['qb-status'],
@@ -530,10 +626,22 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
     queryFn:  () => purchaseOrderApi.getAll(projectId),
   })
 
+  const { data: poStatuses = [] } = useQuery<PurchaseOrderStatus[]>({
+    queryKey: ['po-statuses'],
+    queryFn:  purchaseOrderStatusApi.getAll,
+  })
+
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['purchase-orders', projectId] })
     qc.invalidateQueries({ queryKey: ['project-detail', projectId] })
   }
+
+  const patchInternalStatusMut = useMutation({
+    mutationFn: ({ poId, statusId }: { poId: number; statusId: number | null }) =>
+      purchaseOrderStatusApi.patchOnPo(projectId, poId, statusId),
+    onSuccess: invalidate,
+    onError:   () => toast.error('Failed to update status.'),
+  })
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => purchaseOrderApi.delete(projectId, id),
@@ -561,7 +669,32 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
   })
 
   const qbConnected = qbStatus?.connected ?? false
-  const totalAmount = pos.reduce((s, p) => s + p.amount, 0)
+  const filteredPos = statusFilters.length > 0
+    ? pos.filter(p => statusFilters.includes(p.qbStatus))
+    : pos
+  const totalAmount = filteredPos.reduce((s, p) => s + p.amount, 0)
+
+  function toggleStatusFilter(s: string) {
+    setStatusFilters(prev =>
+      prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
+    )
+  }
+
+  function exportToExcel() {
+    const rows = filteredPos.map(po => ({
+      'Order #':  po.orderNumber,
+      'Building': po.buildingName,
+      'Lot':      po.lotName,
+      'Amount':   po.amount,
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(rows)
+    ws['!cols'] = [{ wch: 16 }, { wch: 20 }, { wch: 20 }, { wch: 14 }]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Purchase Orders')
+    XLSX.writeFile(wb, `purchase-orders-${projectId}.xlsx`)
+  }
 
   return (
     <div className="space-y-4">
@@ -588,6 +721,18 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
             <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${syncAllMut.isPending ? 'animate-spin' : ''}`} />
             Sync All
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setManageStatuses(true)} title="Manage internal statuses">
+            <Settings2 className="h-3.5 w-3.5 mr-1.5" /> Statuses
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportToExcel}
+            disabled={filteredPos.length === 0}
+            title="Export current results to Excel"
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5" /> Export
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
             <Upload className="h-3.5 w-3.5 mr-1.5" /> Import CSV
           </Button>
@@ -597,10 +742,39 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
         </div>
       </div>
 
-      {/* Total */}
+      {/* QB Status filter pills (multi-select) */}
       {pos.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-muted-foreground mr-0.5">QB Status:</span>
+          {QB_STATUSES.filter(s => pos.some(p => p.qbStatus === s)).map(s => (
+            <button
+              key={s}
+              onClick={() => toggleStatusFilter(s)}
+              className={`rounded-full px-3 py-0.5 text-xs font-medium border transition-colors ${
+                statusFilters.includes(s)
+                  ? 'bg-foreground text-background border-foreground'
+                  : 'border-border text-muted-foreground hover:border-foreground hover:text-foreground'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+          {statusFilters.length > 0 && (
+            <button
+              onClick={() => setStatusFilters([])}
+              className="text-xs text-muted-foreground hover:text-foreground underline ml-1"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Total */}
+      {filteredPos.length > 0 && (
         <p className="text-sm text-muted-foreground">
-          {pos.length} purchase order{pos.length !== 1 ? 's' : ''} · Total: {fmtCurrency(totalAmount)}
+          {filteredPos.length} purchase order{filteredPos.length !== 1 ? 's' : ''}
+          {statusFilters.length > 0 && ` · ${statusFilters.join(', ')}`} · Total: {fmtCurrency(totalAmount)}
         </p>
       )}
 
@@ -610,6 +784,10 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
       ) : pos.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-12 text-center">
           <p className="text-sm text-muted-foreground">No purchase orders yet.</p>
+        </div>
+      ) : filteredPos.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-8 text-center">
+          <p className="text-sm text-muted-foreground">No purchase orders match the selected filter.</p>
         </div>
       ) : (
         <div className="rounded-md border">
@@ -621,13 +799,14 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
                 <TableHead>Building</TableHead>
                 <TableHead>Lot</TableHead>
                 <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>QB Status</TableHead>
+                <TableHead>Internal Status</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pos.map(po => (
+              {filteredPos.map(po => (
                 <TableRow key={po.id}>
                   {editingPo?.id === po.id ? (
                     <>
@@ -651,10 +830,11 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
                         />
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${PO_STATUS_COLORS[po.status] ?? ''}`}>
-                          {po.status}
+                        <Badge variant="outline" className={`text-[10px] ${QB_STATUS_COLORS[po.qbStatus] ?? ''}`}>
+                          {po.qbStatus}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{po.internalStatusName ?? '—'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {fmtDate(po.createdAt)}
                       </TableCell>
@@ -687,9 +867,25 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
                       <TableCell className="text-sm text-muted-foreground">{po.lotName}</TableCell>
                       <TableCell className="text-sm">{fmtCurrency(po.amount)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${PO_STATUS_COLORS[po.status] ?? ''}`}>
-                          {po.status}
+                        <Badge variant="outline" className={`text-[10px] ${QB_STATUS_COLORS[po.qbStatus] ?? ''}`}>
+                          {po.qbStatus}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <select
+                          value={po.internalStatusId ?? ''}
+                          onChange={e => patchInternalStatusMut.mutate({
+                            poId: po.id,
+                            statusId: e.target.value ? Number(e.target.value) : null,
+                          })}
+                          className="text-xs rounded border border-input bg-background px-1.5 py-0.5 max-w-[120px]"
+                          style={po.internalStatusColor ? { borderColor: po.internalStatusColor, color: po.internalStatusColor } : undefined}
+                        >
+                          <option value="">— None —</option>
+                          {poStatuses.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {fmtDate(po.createdAt)}
@@ -748,6 +944,10 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
           onClose={() => setImportOpen(false)}
         />
       )}
+
+      {manageStatuses && (
+        <ManagePoStatusesDialog onClose={() => setManageStatuses(false)} />
+      )}
     </div>
   )
 }
@@ -760,6 +960,25 @@ function BuildingsTab({ projectId }: { projectId: number }) {
   const [newBuildName,   setNewBuildName]   = useState('')
   const [newBuildDesc,   setNewBuildDesc]   = useState('')
 
+  // Persist expanded state per building in localStorage
+  const storageKey = `bos-buildings-open-${projectId}`
+  const [expandedMap, setExpandedMap] = useState<Record<number, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}') }
+    catch { return {} }
+  })
+
+  function setExpanded(id: number, value: boolean) {
+    setExpandedMap(prev => {
+      const next = { ...prev, [id]: value }
+      localStorage.setItem(storageKey, JSON.stringify(next))
+      return next
+    })
+  }
+
+  function isExpanded(id: number) {
+    return expandedMap[id] !== false // default open
+  }
+
   const { data: buildings = [], isLoading } = useQuery({
     queryKey: ['buildings', projectId],
     queryFn:  () => buildingApi.getAll(projectId),
@@ -770,6 +989,18 @@ function BuildingsTab({ projectId }: { projectId: number }) {
     qc.invalidateQueries({ queryKey: ['project-detail', projectId] })
   }
 
+  function expandAll() {
+    const next = Object.fromEntries(buildings.map(b => [b.id, true]))
+    setExpandedMap(next)
+    localStorage.setItem(storageKey, JSON.stringify(next))
+  }
+
+  function collapseAll() {
+    const next = Object.fromEntries(buildings.map(b => [b.id, false]))
+    setExpandedMap(next)
+    localStorage.setItem(storageKey, JSON.stringify(next))
+  }
+
   const addBuildMut = useMutation({
     mutationFn: () => buildingApi.create(projectId, { name: newBuildName.trim(), description: newBuildDesc.trim() }),
     onSuccess:  () => { setAddingBuilding(false); setNewBuildName(''); setNewBuildDesc(''); invalidate() },
@@ -778,6 +1009,25 @@ function BuildingsTab({ projectId }: { projectId: number }) {
 
   return (
     <div className="space-y-3">
+      {/* Expand / Collapse All */}
+      {buildings.length > 1 && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={expandAll}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronsUpDown className="h-3.5 w-3.5" /> Expand All
+          </button>
+          <span className="text-muted-foreground/40">·</span>
+          <button
+            onClick={collapseAll}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronsUpDown className="h-3.5 w-3.5" /> Collapse All
+          </button>
+        </div>
+      )}
+
       {isLoading ? (
         <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
       ) : buildings.length === 0 && !addingBuilding ? (
@@ -786,7 +1036,14 @@ function BuildingsTab({ projectId }: { projectId: number }) {
         </div>
       ) : (
         buildings.map(b => (
-          <BuildingCard key={b.id} building={b} projectId={projectId} onChanged={invalidate} />
+          <BuildingCard
+            key={b.id}
+            building={b}
+            projectId={projectId}
+            expanded={isExpanded(b.id)}
+            onToggle={() => setExpanded(b.id, !isExpanded(b.id))}
+            onChanged={invalidate}
+          />
         ))
       )}
 

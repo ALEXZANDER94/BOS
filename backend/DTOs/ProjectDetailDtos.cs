@@ -45,6 +45,15 @@ public record UpdateBuildingRequest(string Name, string Description);
 
 // ── PurchaseOrder ─────────────────────────────────────────────────────────────
 
+public record PurchaseOrderStatusDto(
+    int    Id,
+    string Name,
+    string Color);
+
+public record CreatePoStatusRequest(string Name, string Color);
+public record UpdatePoStatusRequest(string Name, string Color);
+public record PatchPoInternalStatusRequest(int? StatusId);
+
 public record PurchaseOrderDto(
     int      Id,
     int      ProjectId,
@@ -54,7 +63,10 @@ public record PurchaseOrderDto(
     string   OrderNumber,
     string?  InvoiceNumber,
     decimal  Amount,
-    string   Status,
+    string   QbStatus,
+    int?     InternalStatusId,
+    string?  InternalStatusName,
+    string?  InternalStatusColor,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
@@ -102,3 +114,13 @@ public record PoCsvImportResultDto(
     int BuildingsCreated,
     int LotsCreated,
     List<PoCsvRowError> Errors);
+
+// ── Project CSV Import ────────────────────────────────────────────────────────
+
+public record ProjectCsvRowError(int RowNumber, string ProjectName, string Reason);
+
+public record ProjectCsvImportResultDto(
+    int ImportedCount,
+    int SkippedCount,
+    int ErrorCount,
+    List<ProjectCsvRowError> Errors);

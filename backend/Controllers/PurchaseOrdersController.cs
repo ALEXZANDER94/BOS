@@ -30,8 +30,8 @@ public class PurchaseOrdersController : ControllerBase
     {
         var pos = await _db.PurchaseOrders
             .Where(po => po.ProjectId == projectId)
-            .Include(po => po.Lot)
-                .ThenInclude(l => l!.Building)
+            .Include(po => po.Lot).ThenInclude(l => l!.Building)
+            .Include(po => po.InternalStatus)
             .OrderBy(po => po.CreatedAt)
             .ToListAsync();
 
@@ -59,7 +59,7 @@ public class PurchaseOrdersController : ControllerBase
             LotId       = req.LotId,
             OrderNumber = req.OrderNumber.Trim(),
             Amount      = req.Amount,
-            Status      = "Open",
+            QbStatus    = "Not Found",
             CreatedAt   = now,
             UpdatedAt   = now,
         };
@@ -80,6 +80,7 @@ public class PurchaseOrdersController : ControllerBase
     {
         var po = await _db.PurchaseOrders
             .Include(po => po.Lot).ThenInclude(l => l!.Building)
+            .Include(po => po.InternalStatus)
             .FirstOrDefaultAsync(po => po.Id == id && po.ProjectId == projectId);
 
         if (po is null) return NotFound();
@@ -112,12 +113,13 @@ public class PurchaseOrdersController : ControllerBase
     {
         var po = await _db.PurchaseOrders
             .Include(po => po.Lot).ThenInclude(l => l!.Building)
+            .Include(po => po.InternalStatus)
             .FirstOrDefaultAsync(po => po.Id == id && po.ProjectId == projectId);
 
         if (po is null) return NotFound();
 
         var result       = await _qb.GetPoStatusAsync(po.OrderNumber);
-        po.Status        = result.Status;
+        po.QbStatus      = result.Status;
         po.InvoiceNumber = result.InvoiceNumber;
         po.UpdatedAt     = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -132,6 +134,7 @@ public class PurchaseOrdersController : ControllerBase
         var pos = await _db.PurchaseOrders
             .Where(po => po.ProjectId == projectId)
             .Include(po => po.Lot).ThenInclude(l => l!.Building)
+            .Include(po => po.InternalStatus)
             .ToListAsync();
 
         var orderNumbers = pos.Select(po => po.OrderNumber);
@@ -142,7 +145,7 @@ public class PurchaseOrdersController : ControllerBase
         {
             if (results.TryGetValue(po.OrderNumber, out var r))
             {
-                po.Status        = r.Status;
+                po.QbStatus      = r.Status;
                 po.InvoiceNumber = r.InvoiceNumber;
                 po.UpdatedAt     = now;
             }
@@ -150,6 +153,36 @@ public class PurchaseOrdersController : ControllerBase
 
         await _db.SaveChangesAsync();
         return Ok(pos.Select(ToDto));
+    }
+
+    // PATCH /api/project/1/purchase-order/9/internal-status
+    [HttpPatch("{id:int}/internal-status")]
+    public async Task<IActionResult> PatchInternalStatus(int projectId, int id, [FromBody] PatchPoInternalStatusRequest req)
+    {
+        var po = await _db.PurchaseOrders
+            .Include(po => po.Lot).ThenInclude(l => l!.Building)
+            .Include(po => po.InternalStatus)
+            .FirstOrDefaultAsync(po => po.Id == id && po.ProjectId == projectId);
+
+        if (po is null) return NotFound();
+
+        if (req.StatusId.HasValue)
+        {
+            var statusExists = await _db.PurchaseOrderStatuses.AnyAsync(s => s.Id == req.StatusId.Value);
+            if (!statusExists) return BadRequest(new { message = "Status not found." });
+        }
+
+        po.InternalStatusId = req.StatusId;
+        po.UpdatedAt        = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        // Reload the InternalStatus navigation after update
+        if (po.InternalStatusId.HasValue)
+            await _db.Entry(po).Reference(p => p.InternalStatus).LoadAsync();
+        else
+            po.InternalStatus = null;
+
+        return Ok(ToDto(po));
     }
 
     // POST /api/project/1/purchase-order/import
@@ -183,7 +216,10 @@ public class PurchaseOrdersController : ControllerBase
         po.OrderNumber,
         po.InvoiceNumber,
         po.Amount,
-        po.Status,
+        po.QbStatus,
+        po.InternalStatusId,
+        po.InternalStatus?.Name,
+        po.InternalStatus?.Color,
         po.CreatedAt,
         po.UpdatedAt);
 }

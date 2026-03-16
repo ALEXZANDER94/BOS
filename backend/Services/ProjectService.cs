@@ -20,6 +20,7 @@ public interface IProjectService
     Task                                    AssignContactAsync(int clientId, int projectId, int contactId);
     Task                                    UnassignContactAsync(int clientId, int projectId, int contactId);
     Task<PoCsvImportResultDto>              ImportPurchaseOrdersAsync(int projectId, IFormFile file);
+    Task<ProjectCsvImportResultDto>         ImportProjectsAsync(IFormFile file);
 }
 
 public class ProjectService : IProjectService
@@ -274,10 +275,10 @@ public class ProjectService : IProjectService
                 continue;
             }
 
-            var status = string.IsNullOrEmpty(statusRaw) ? "Open" : statusRaw;
-            if (status != "Open" && status != "Closed")
+            var status = string.IsNullOrEmpty(statusRaw) ? "Unpaid" : statusRaw;
+            if (status != "Unpaid" && status != "Paid" && status != "Not Found")
             {
-                errors.Add(new PoCsvRowError(rowNumber, orderNumber, $"Invalid status '{status}'. Must be Open or Closed."));
+                errors.Add(new PoCsvRowError(rowNumber, orderNumber, $"Invalid status '{status}'. Must be Unpaid, Paid, or Not Found."));
                 continue;
             }
 
@@ -332,7 +333,7 @@ public class ProjectService : IProjectService
                 LotId       = lot.Id,
                 OrderNumber = orderNumber,
                 Amount      = amount,
-                Status      = status,
+                QbStatus    = status,
                 CreatedAt   = now,
                 UpdatedAt   = now,
             });
@@ -344,6 +345,97 @@ public class ProjectService : IProjectService
         await _db.SaveChangesAsync();
 
         return new PoCsvImportResultDto(importedCount, skippedCount, errors.Count(e => !e.Reason.Contains("skipped")), buildingsCreated, lotsCreated, errors);
+    }
+
+    public async Task<ProjectCsvImportResultDto> ImportProjectsAsync(IFormFile file)
+    {
+        var errors        = new List<ProjectCsvRowError>();
+        int importedCount = 0;
+        int skippedCount  = 0;
+
+        var clients = await _db.Clients.ToListAsync();
+
+        var existingProjects = (await _db.Projects
+            .Select(p => new { p.ClientId, Name = p.Name.ToLower() })
+            .ToListAsync()).ToHashSet();
+
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+        {
+            HasHeaderRecord   = true,
+            TrimOptions       = TrimOptions.Trim,
+            MissingFieldFound = null,
+        };
+
+        using var reader = new StreamReader(file.OpenReadStream());
+        using var csv    = new CsvReader(reader, config);
+
+        await csv.ReadAsync();
+        csv.ReadHeader();
+
+        int rowNumber = 0;
+        var now       = DateTime.UtcNow;
+
+        while (await csv.ReadAsync())
+        {
+            rowNumber++;
+
+            var projectName = csv.GetField("ProjectName")?.Trim() ?? "";
+            var clientName  = csv.GetField("ClientName")?.Trim()  ?? "";
+            var description = csv.GetField("Description")?.Trim() ?? "";
+
+            if (string.IsNullOrEmpty(projectName) && string.IsNullOrEmpty(clientName))
+                continue;
+
+            if (string.IsNullOrEmpty(projectName))
+            {
+                errors.Add(new ProjectCsvRowError(rowNumber, "", "Project name is required."));
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(clientName))
+            {
+                errors.Add(new ProjectCsvRowError(rowNumber, projectName, "Client name is required."));
+                continue;
+            }
+
+            var client = clients.FirstOrDefault(c =>
+                string.Equals(c.Name, clientName, StringComparison.OrdinalIgnoreCase));
+
+            if (client is null)
+            {
+                errors.Add(new ProjectCsvRowError(rowNumber, projectName, $"Client '{clientName}' not found."));
+                continue;
+            }
+
+            var key = new { ClientId = client.Id, Name = projectName.ToLower() };
+            if (existingProjects.Any(p => p.ClientId == key.ClientId && p.Name == key.Name))
+            {
+                skippedCount++;
+                errors.Add(new ProjectCsvRowError(rowNumber, projectName, "Project already exists for this client — skipped."));
+                continue;
+            }
+
+            _db.Projects.Add(new Project
+            {
+                ClientId    = client.Id,
+                Name        = projectName,
+                Description = description,
+                Status      = "Active",
+                CreatedAt   = now,
+                UpdatedAt   = now,
+            });
+
+            existingProjects.Add(new { ClientId = client.Id, Name = projectName.ToLower() });
+            importedCount++;
+        }
+
+        await _db.SaveChangesAsync();
+
+        return new ProjectCsvImportResultDto(
+            importedCount,
+            skippedCount,
+            errors.Count(e => !e.Reason.Contains("skipped")),
+            errors);
     }
 
     private static ProjectDto ToDto(Project p) => new(

@@ -136,6 +136,38 @@ public class GmailController : ControllerBase
         }
     }
 
+    // GET /api/gmail/message/{messageId}/attachment/{attachmentId}?filename=...&mimeType=...
+    // Fetches and streams a Gmail attachment. Inline for images/PDFs, download otherwise.
+    [HttpGet("message/{messageId}/attachment/{attachmentId}")]
+    public async Task<IActionResult> GetAttachment(
+        string messageId,
+        string attachmentId,
+        [FromQuery] string filename = "attachment",
+        [FromQuery] string mimeType = "application/octet-stream")
+    {
+        var email = CurrentUserEmail;
+        if (string.IsNullOrEmpty(email)) return Unauthorized();
+
+        if (!await _gmail.HasValidTokenAsync(email))
+            return BadRequest(new { error = "Gmail not connected." });
+
+        try
+        {
+            var data     = await _gmail.GetAttachmentDataAsync(email, messageId, attachmentId);
+            var isInline = mimeType.StartsWith("image/") || mimeType == "application/pdf";
+            var cd       = isInline
+                ? $"inline; filename=\"{filename}\""
+                : $"attachment; filename=\"{filename}\"";
+
+            Response.Headers["Content-Disposition"] = cd;
+            return File(data, mimeType);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     // Builds a Gmail search query targeting a specific client's domain and contacts.

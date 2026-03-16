@@ -28,18 +28,27 @@ export interface Building {
   lots:        Lot[]
 }
 
+export interface PurchaseOrderStatus {
+  id:    number
+  name:  string
+  color: string
+}
+
 export interface PurchaseOrder {
-  id:            number
-  projectId:     number
-  lotId:         number
-  lotName:       string
-  buildingName:  string
-  orderNumber:   string
-  invoiceNumber: string | null
-  amount:        number
-  status:        string
-  createdAt:     string
-  updatedAt:     string
+  id:                  number
+  projectId:           number
+  lotId:               number
+  lotName:             string
+  buildingName:        string
+  orderNumber:         string
+  invoiceNumber:       string | null
+  amount:              number
+  qbStatus:            string
+  internalStatusId:    number | null
+  internalStatusName:  string | null
+  internalStatusColor: string | null
+  createdAt:           string
+  updatedAt:           string
 }
 
 export interface AssignedContact {
@@ -170,6 +179,51 @@ export const purchaseOrderApi = {
     fd.append('file', file)
     return axios.post<PoCsvImportResult>(
       `/api/project/${projectId}/purchase-order/import`,
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    ).then(r => r.data)
+  },
+}
+
+export const purchaseOrderStatusApi = {
+  getAll: () =>
+    axios.get<PurchaseOrderStatus[]>('/api/purchase-order-statuses').then(r => r.data),
+
+  create: (data: { name: string; color: string }) =>
+    axios.post<PurchaseOrderStatus>('/api/purchase-order-statuses', data).then(r => r.data),
+
+  update: (id: number, data: { name: string; color: string }) =>
+    axios.put<PurchaseOrderStatus>(`/api/purchase-order-statuses/${id}`, data).then(r => r.data),
+
+  delete: (id: number) =>
+    axios.delete(`/api/purchase-order-statuses/${id}`),
+
+  patchOnPo: (projectId: number, poId: number, statusId: number | null) =>
+    axios.patch<PurchaseOrder>(
+      `/api/project/${projectId}/purchase-order/${poId}/internal-status`,
+      { statusId }
+    ).then(r => r.data),
+}
+
+export interface ProjectCsvRowError {
+  rowNumber:   number
+  projectName: string
+  reason:      string
+}
+
+export interface ProjectCsvImportResult {
+  importedCount: number
+  skippedCount:  number
+  errorCount:    number
+  errors:        ProjectCsvRowError[]
+}
+
+export const allProjectsApi = {
+  importFromCsv: (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return axios.post<ProjectCsvImportResult>(
+      '/api/project/import',
       fd,
       { headers: { 'Content-Type': 'multipart/form-data' } }
     ).then(r => r.data)

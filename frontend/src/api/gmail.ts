@@ -16,10 +16,18 @@ export interface EmailSummary {
   contactName: string | null
 }
 
+export interface AttachmentMeta {
+  attachmentId: string
+  filename:     string
+  mimeType:     string
+  size:         number
+}
+
 export interface EmailDetail extends EmailSummary {
   ccAddresses: string | null
   bodyText:    string | null
   bodyHtml:    string | null
+  attachments: AttachmentMeta[]
 }
 
 export interface EmailListResponse {
@@ -47,4 +55,8 @@ export const gmailApi = {
 
   getAliases: () =>
     axios.get<string[]>(`${BASE}/aliases`).then(r => r.data),
+
+  getAttachmentUrl: (messageId: string, attachmentId: string, filename: string, mimeType: string) =>
+    `${BASE}/message/${encodeURIComponent(messageId)}/attachment/${encodeURIComponent(attachmentId)}` +
+    `?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}`,
 }

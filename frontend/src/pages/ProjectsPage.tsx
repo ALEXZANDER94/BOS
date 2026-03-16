@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search } from 'lucide-react'
+import { Search, Upload } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/table'
 import { useAllProjects } from '@/hooks/useProjects'
 import { useClients } from '@/hooks/useClients'
+import ImportProjectsModal from '@/components/projects/ImportProjectsModal'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,7 @@ export default function ProjectsPage() {
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
   const [clientFilter, setClientFilter] = useState<number | undefined>(undefined)
+  const [importOpen, setImportOpen]     = useState(false)
 
   const { data: projects = [], isLoading } = useAllProjects(
     search   || undefined,
@@ -66,7 +69,12 @@ export default function ProjectsPage() {
               : `${projects.length} ${projects.length === 1 ? 'project' : 'projects'}${search ? ` matching "${search}"` : ''}`}
           </p>
         </div>
+        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+          <Upload className="h-3.5 w-3.5 mr-1.5" /> Import CSV
+        </Button>
       </div>
+
+      {importOpen && <ImportProjectsModal onClose={() => setImportOpen(false)} />}
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">

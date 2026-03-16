@@ -27,7 +27,8 @@ public class AppDbContext : DbContext
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
 
     // QuickBooks integration
-    public DbSet<QuickBooksToken> QuickBooksTokens => Set<QuickBooksToken>();
+    public DbSet<QuickBooksToken>      QuickBooksTokens      => Set<QuickBooksToken>();
+    public DbSet<PurchaseOrderStatus>  PurchaseOrderStatuses => Set<PurchaseOrderStatus>();
 
     // Gmail integration
     public DbSet<UserGoogleToken>     UserGoogleTokens     => Set<UserGoogleToken>();
@@ -312,7 +313,8 @@ public class AppDbContext : DbContext
             entity.Property(e => e.OrderNumber).HasColumnName("order_number").IsRequired();
             entity.Property(e => e.InvoiceNumber).HasColumnName("invoice_number").IsRequired(false);
             entity.Property(e => e.Amount).HasColumnName("amount").HasColumnType("decimal(18,2)");
-            entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue("Open");
+            entity.Property(e => e.QbStatus).HasColumnName("qb_status").HasDefaultValue("Not Found");
+            entity.Property(e => e.InternalStatusId).HasColumnName("internal_status_id").IsRequired(false);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(e => e.ProjectId);
@@ -322,11 +324,26 @@ public class AppDbContext : DbContext
                   .HasForeignKey(e => e.ProjectId)
                   .OnDelete(DeleteBehavior.Cascade);
 
-            // Restrict: can't delete a lot that still has purchase orders
             entity.HasOne(e => e.Lot)
                   .WithMany(l => l.PurchaseOrders)
                   .HasForeignKey(e => e.LotId)
                   .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.InternalStatus)
+                  .WithMany(s => s.PurchaseOrders)
+                  .HasForeignKey(e => e.InternalStatusId)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ── PurchaseOrderStatus ───────────────────────────────────────────────────
+        modelBuilder.Entity<PurchaseOrderStatus>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.Property(e => e.Color).HasColumnName("color").HasDefaultValue("#6b7280");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
         });
 
         // ── QuickBooksToken ───────────────────────────────────────────────────────

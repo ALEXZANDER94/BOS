@@ -23,6 +23,7 @@ A self-hosted, full-stack business operations platform covering supplier managem
 - **Clients** — track companies with domain, industry, website, and address
 - **Contacts** — link contacts to clients with email, phone, and title
 - **Projects** — associate projects with clients and contacts, track status; click any project to open its detail page
+  - **CSV import** — bulk-create projects from a CSV file (`ProjectName`, `ClientName`, `Description`); clients are matched by name, duplicates are skipped with a clear report
 - **Activity Logs** — record notes and activity against client records
 
 ### Project Details
@@ -31,10 +32,15 @@ A self-hosted, full-stack business operations platform covering supplier managem
 - **Buildings & Lots** — hierarchical tree of buildings and lots within a project; add, rename, and delete inline without leaving the page
   - Each lot can have a street address attached (add, edit, or remove inline)
   - Deleting a lot that has purchase orders is blocked with a clear error message
-- **Purchase Orders** — log purchase orders against a specific lot within the project; track order number, amount, and payment status
-  - Status is read-only within BOS and is synced directly from QuickBooks Online
-  - **Sync** button per row, or **Sync All** to refresh every PO on the project at once
-  - Sync buttons are disabled with a tooltip when QuickBooks is not connected
+  - Building expand/collapse state is persisted to localStorage per project; **Expand All** / **Collapse All** buttons appear when there is more than one building
+- **Purchase Orders** — log purchase orders against a specific lot within the project
+  - **QB Status** — read-only status synced from QuickBooks Online: `Unpaid` (invoice exists, balance > 0), `Paid` (balance = 0), or `Not Found` (no matching invoice)
+  - QuickBooks matching is performed by searching Invoice line item descriptions for the BOS order number; the matched Invoice Number is pulled into BOS and displayed alongside the order
+  - **Internal Status** — user-defined statuses (with custom colours) assignable per PO inline; managed globally via the **Statuses** dialog
+  - **Sync** button per row, or **Sync All** to refresh every PO on the project at once; buttons are disabled with a tooltip when QuickBooks is not connected
+  - **Multi-select QB status filter** — toggle one or more status pills to filter the table; click **Clear** to reset
+  - **CSV import** — bulk-import purchase orders from a CSV file (`OrderNumber`, `BuildingName`, `LotName`, `Amount`, `Status`); buildings and lots that do not yet exist are created automatically
+  - **Export to Excel** — exports the current filtered results (`Order #`, `Building`, `Lot`, `Amount`) as an `.xlsx` file
 
 ### Email (Gmail Integration)
 - Sign in with Google to connect your Gmail account (read-only access)
@@ -43,10 +49,12 @@ A self-hosted, full-stack business operations platform covering supplier managem
 - **Filter by group/alias** — detect Google Workspace groups and user aliases via the Admin SDK and filter the inbox by them
 - **Toggleable aliases** — hide aliases you don't use from the filter sidebar; preference is persisted per user
 - **Filter by category** — assign user-defined categories to emails and view them as a faceted list
+- **Status filter** — when viewing a category, a dropdown above the email list filters by that category's workflow statuses
 - **Search** — search across subject, sender, and body content via Gmail's native search
 - **Email categories** — user-defined top-level classifications (e.g. Invoice, Scheduling, Proposal) with colored badges
 - **Category statuses** — user-defined workflow statuses scoped to each category (e.g. On-Hold, Processing, Completed)
 - Assign and reassign categories and statuses to emails in real time
+- **Attachments** — attachments are listed as clickable chips in the email detail header; images and PDFs open inline in a new tab, all other file types download directly. No additional OAuth scopes are required beyond `gmail.readonly`
 - **Collapsible To: field** — long recipient lists are truncated to the first address with a "+N more" toggle
 - **Add to BOS** — add a sender or recipient directly as a new Client or Contact from the email detail view; domain matching automatically suggests the correct client to link to
 - **Pagination** — configurable page size (25 / 50 / 100) with a "Load more" button; preference is persisted per user
@@ -93,6 +101,7 @@ A self-hosted, full-stack business operations platform covering supplier managem
 | Real-time | ASP.NET Core SignalR (WebSockets) |
 | PDF | Adobe PDF Services SDK |
 | Accounting | QuickBooks Online API (OAuth 2.0, PO status sync) |
+| Excel export | SheetJS (xlsx) |
 
 ---
 

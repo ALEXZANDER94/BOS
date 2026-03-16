@@ -136,7 +136,7 @@ public class QuickBooksService : IQuickBooksService
     public async Task<QbPoResult> GetPoStatusAsync(string orderNumber)
     {
         var invoices = await FetchAllInvoicesAsync();
-        if (invoices is null) return new QbPoResult("Unknown", null);
+        if (invoices is null) return new QbPoResult("Not Found", null);
 
         return ResolveOrderNumber(orderNumber, invoices);
     }
@@ -149,7 +149,7 @@ public class QuickBooksService : IQuickBooksService
         foreach (var orderNumber in orderNumbers)
         {
             result[orderNumber] = invoices is null
-                ? new QbPoResult("Unknown", null)
+                ? new QbPoResult("Not Found", null)
                 : ResolveOrderNumber(orderNumber, invoices);
         }
 
@@ -259,7 +259,7 @@ public class QuickBooksService : IQuickBooksService
             _logger.LogWarning(
                 "No QB invoice found whose line description contains OrderNumber={OrderNumber}.",
                 orderNumber);
-            return new QbPoResult("Unknown", null);
+            return new QbPoResult("Not Found", null);
         }
 
         var invoiceNumber = match.Value.TryGetProperty("DocNumber", out var docProp)
@@ -270,7 +270,7 @@ public class QuickBooksService : IQuickBooksService
             ? balProp.GetDecimal()
             : 1m; // assume open if field missing
 
-        var status = balance == 0m ? "Closed" : "Open";
+        var status = balance == 0m ? "Paid" : "Unpaid";
 
         _logger.LogInformation(
             "QB invoice matched. OrderNumber={OrderNumber} InvoiceNumber={InvoiceNumber} Status={Status}",

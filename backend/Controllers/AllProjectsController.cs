@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using BOS.Backend.Services;
+using BOS.Backend.DTOs;
 
 namespace BOS.Backend.Controllers;
 
@@ -19,6 +20,21 @@ public class AllProjectsController : ControllerBase
         [FromQuery] string? status,
         [FromQuery] int?    clientId)
         => Ok(await _projects.GetAllProjectsAsync(search, status, clientId));
+
+    // POST /api/project/import
+    [HttpPost("import")]
+    [Authorize]
+    public async Task<IActionResult> Import(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { message = "No file uploaded." });
+
+        if (!Path.GetExtension(file.FileName).Equals(".csv", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "Only CSV files are accepted." });
+
+        var result = await _projects.ImportProjectsAsync(file);
+        return Ok(result);
+    }
 
     // GET /api/project/7
     [HttpGet("{id:int}")]

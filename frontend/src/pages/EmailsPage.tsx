@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   RefreshCw, Mail, MailOpen, AlertCircle, Inbox, Search, X,
-  Settings2, Eye, EyeOff, ChevronDown, ChevronUp,
+  Settings2, Eye, EyeOff, ChevronDown, ChevronUp, Paperclip,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +13,7 @@ import {
   useEmails, useEmailDetail, useRefreshEmails, useGmailStatus, useGmailAliases,
   type EmailFilter,
 } from '@/hooks/useGmail'
+import { gmailApi } from '@/api/gmail'
 import { useClients } from '@/hooks/useClients'
 import {
   useEmailCategories, useEmailAssignmentsBatch, useCategoryEmails,
@@ -28,6 +29,12 @@ import type { EmailAssignment } from '@/api/emailCategories'
 import type { Client } from '@/api/clients'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtSize(bytes: number) {
+  if (bytes < 1024)             return `${bytes} B`
+  if (bytes < 1024 * 1024)     return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 function formatDate(iso: string) {
   const d = new Date(iso)
@@ -283,6 +290,23 @@ function EmailDetailPanel({
           <div className="pt-0.5">
             <EmailAssignmentPanel messageId={messageId} />
           </div>
+          {detail.attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {detail.attachments.map(att => (
+                <a
+                  key={att.attachmentId}
+                  href={gmailApi.getAttachmentUrl(messageId, att.attachmentId, att.filename, att.mimeType)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs hover:bg-muted transition-colors"
+                >
+                  <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate max-w-[160px]">{att.filename}</span>
+                  <span className="text-muted-foreground shrink-0">{fmtSize(att.size)}</span>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -534,39 +558,6 @@ export default function EmailsPage() {
           )}
         </nav>
 
-        {/* Status sub-filter — shown when a category with statuses is selected */}
-        {filter.type === 'category' && (() => {
-          const activeCat = categories.find(c => c.id === filter.id)
-          if (!activeCat || activeCat.statuses.length === 0) return null
-          return (
-            <>
-              <div className="px-3 py-2 border-b border-border">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Status
-                </p>
-              </div>
-              <nav className="p-2 space-y-0.5 border-b border-border">
-                <SidebarBtn
-                  active={selectedStatusId === null}
-                  onClick={() => { setSelectedStatusId(null); setSelectedMessageId(null) }}
-                >
-                  All
-                </SidebarBtn>
-                {activeCat.statuses.map(s => (
-                  <SidebarBtn
-                    key={s.id}
-                    active={selectedStatusId === s.id}
-                    onClick={() => { setSelectedStatusId(s.id); setSelectedMessageId(null) }}
-                    dot={s.color}
-                  >
-                    {s.name}
-                  </SidebarBtn>
-                ))}
-              </nav>
-            </>
-          )
-        })()}
-
         {/* Clients */}
         <div className="px-3 py-3 border-b border-border">
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -626,7 +617,7 @@ export default function EmailsPage() {
               )}
             </div>
           </div>
-          {filter.type !== 'category' && (
+          {filter.type !== 'category' ? (
             <div className="px-3 pb-2.5 relative">
               <Search className="absolute left-5.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
               <Input
@@ -644,7 +635,28 @@ export default function EmailsPage() {
                 </button>
               )}
             </div>
-          )}
+          ) : (() => {
+            const activeCat = categories.find(c => c.id === (filter as { type: 'category'; id: number }).id)
+            if (!activeCat || activeCat.statuses.length === 0) return null
+            return (
+              <div className="px-3 pb-2.5">
+                <select
+                  value={selectedStatusId ?? ''}
+                  onChange={e => {
+                    const val = e.target.value
+                    setSelectedStatusId(val === '' ? null : Number(val))
+                    setSelectedMessageId(null)
+                  }}
+                  className="w-full h-7 text-xs text-muted-foreground bg-transparent border border-border rounded px-2 cursor-pointer hover:border-foreground transition-colors focus:outline-none"
+                >
+                  <option value="">All statuses</option>
+                  {activeCat.statuses.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Email rows */}

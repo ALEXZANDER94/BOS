@@ -17,6 +17,7 @@ public interface IGmailService
     Task<bool>                    HasValidTokenAsync(string userEmail);
     Task<EmailListResponse>       ListEmailsAsync(string userEmail, string? pageToken = null, string? query = null, int maxResults = 25);
     Task<EmailDetailDto>          GetEmailAsync(string userEmail, string messageId);
+    Task<byte[]>                  GetAttachmentDataAsync(string userEmail, string messageId, string attachmentId);
     Task<IReadOnlyList<string>>   GetForwardingAddressesAsync(string userEmail);
     Task<IReadOnlyList<EmailSummaryDto>> GetEmailsByIdsAsync(string userEmail, IEnumerable<string> messageIds);
 }
@@ -109,6 +110,7 @@ public class GmailService : IGmailService
         var (bodyText, bodyHtml)                             = ExtractBody(msg.Payload);
         var (fromAddress, fromName)                          = ParseEmailAddress(from);
         var (clientId, clientName, contactId, contactName)  = await MatchToClientAsync(from, to, cc);
+        var attachments                                      = ExtractAttachments(msg.Payload);
 
         return new EmailDetailDto(
             messageId, msg.ThreadId ?? "",
@@ -116,7 +118,23 @@ public class GmailService : IGmailService
             fromAddress, fromName, to, cc,
             ParseDate(dateStr), isRead,
             bodyText, bodyHtml,
-            clientId, clientName, contactId, contactName);
+            clientId, clientName, contactId, contactName,
+            attachments);
+    }
+
+    public async Task<byte[]> GetAttachmentDataAsync(string userEmail, string messageId, string attachmentId)
+    {
+        var accessToken = await GetValidAccessTokenAsync(userEmail);
+        var service     = CreateApiClient(accessToken);
+
+        var attachmentBody = await service.Users.Messages.Attachments
+            .Get("me", messageId, attachmentId)
+            .ExecuteAsync();
+
+        var base64  = attachmentBody.Data.Replace('-', '+').Replace('_', '/');
+        var padding = (4 - base64.Length % 4) % 4;
+        base64 += new string('=', padding);
+        return Convert.FromBase64String(base64);
     }
 
     public async Task<IReadOnlyList<string>> GetForwardingAddressesAsync(string userEmail)
@@ -422,6 +440,29 @@ public class GmailService : IGmailService
         if (DateTimeOffset.TryParse(dateStr, out var dto))
             return dto.UtcDateTime;
         return DateTime.UtcNow;
+    }
+
+    private static List<AttachmentMetaDto> ExtractAttachments(Google.Apis.Gmail.v1.Data.MessagePart part)
+    {
+        var results = new List<AttachmentMetaDto>();
+        CollectAttachments(part, results);
+        return results;
+    }
+
+    private static void CollectAttachments(Google.Apis.Gmail.v1.Data.MessagePart part, List<AttachmentMetaDto> results)
+    {
+        if (!string.IsNullOrEmpty(part.Body?.AttachmentId) && !string.IsNullOrEmpty(part.Filename))
+        {
+            results.Add(new AttachmentMetaDto(
+                part.Body.AttachmentId,
+                part.Filename,
+                part.MimeType ?? "application/octet-stream",
+                part.Body.Size ?? 0));
+        }
+
+        if (part.Parts != null)
+            foreach (var sub in part.Parts)
+                CollectAttachments(sub, results);
     }
 
     private static (string? text, string? html) ExtractBody(Google.Apis.Gmail.v1.Data.MessagePart part)

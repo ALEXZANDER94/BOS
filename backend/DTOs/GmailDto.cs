@@ -16,6 +16,12 @@ public record EmailSummaryDto(
     string?  ContactName
 );
 
+public record AttachmentMetaDto(
+    string AttachmentId,
+    string Filename,
+    string MimeType,
+    long   Size);
+
 public record EmailDetailDto(
     string   MessageId,
     string   ThreadId,
@@ -31,7 +37,8 @@ public record EmailDetailDto(
     int?     ClientId,
     string?  ClientName,
     int?     ContactId,
-    string?  ContactName
+    string?  ContactName,
+    List<AttachmentMetaDto> Attachments
 );
 
 public record EmailListResponse(

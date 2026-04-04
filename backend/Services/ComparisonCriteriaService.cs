@@ -34,33 +34,35 @@ public class ComparisonCriteriaService : IComparisonCriteriaService
         {
             existing = new ComparisonCriteria
             {
-                SupplierId      = supplierId,
-                MatchColumn     = req.MatchColumn.Trim(),
-                Format          = req.Format.Trim(),
-                ColPrice        = req.ColPrice.Trim(),
-                MatchColX       = req.MatchColX,
-                PriceColX       = req.PriceColX,
-                ColDescription  = string.IsNullOrWhiteSpace(req.ColDescription)  ? null : req.ColDescription.Trim(),
-                ColQuantity     = string.IsNullOrWhiteSpace(req.ColQuantity)     ? null : req.ColQuantity.Trim(),
-                ColTotal        = string.IsNullOrWhiteSpace(req.ColTotal)        ? null : req.ColTotal.Trim(),
+                SupplierId       = supplierId,
+                MatchColumn      = req.MatchColumn.Trim(),
+                Format           = req.Format.Trim(),
+                ColPrice         = req.ColPrice.Trim(),
+                MatchColX        = req.MatchColX,
+                PriceColX        = req.PriceColX,
+                ColDescription   = string.IsNullOrWhiteSpace(req.ColDescription)   ? null : req.ColDescription.Trim(),
+                ColMFR           = string.IsNullOrWhiteSpace(req.ColMFR)           ? null : req.ColMFR.Trim(),
+                ColQuantity      = string.IsNullOrWhiteSpace(req.ColQuantity)      ? null : req.ColQuantity.Trim(),
+                ColTotal         = string.IsNullOrWhiteSpace(req.ColTotal)         ? null : req.ColTotal.Trim(),
                 ColInvoiceNumber = string.IsNullOrWhiteSpace(req.ColInvoiceNumber) ? null : req.ColInvoiceNumber.Trim(),
-                CreatedAt       = DateTime.UtcNow,
-                UpdatedAt       = DateTime.UtcNow,
+                CreatedAt        = DateTime.UtcNow,
+                UpdatedAt        = DateTime.UtcNow,
             };
             _db.ComparisonCriteria.Add(existing);
         }
         else
         {
-            existing.MatchColumn     = req.MatchColumn.Trim();
-            existing.Format          = req.Format.Trim();
-            existing.ColPrice        = req.ColPrice.Trim();
-            existing.MatchColX       = req.MatchColX;
-            existing.PriceColX       = req.PriceColX;
-            existing.ColDescription  = string.IsNullOrWhiteSpace(req.ColDescription)  ? null : req.ColDescription.Trim();
-            existing.ColQuantity     = string.IsNullOrWhiteSpace(req.ColQuantity)     ? null : req.ColQuantity.Trim();
-            existing.ColTotal        = string.IsNullOrWhiteSpace(req.ColTotal)        ? null : req.ColTotal.Trim();
+            existing.MatchColumn      = req.MatchColumn.Trim();
+            existing.Format           = req.Format.Trim();
+            existing.ColPrice         = req.ColPrice.Trim();
+            existing.MatchColX        = req.MatchColX;
+            existing.PriceColX        = req.PriceColX;
+            existing.ColDescription   = string.IsNullOrWhiteSpace(req.ColDescription)   ? null : req.ColDescription.Trim();
+            existing.ColMFR           = string.IsNullOrWhiteSpace(req.ColMFR)           ? null : req.ColMFR.Trim();
+            existing.ColQuantity      = string.IsNullOrWhiteSpace(req.ColQuantity)      ? null : req.ColQuantity.Trim();
+            existing.ColTotal         = string.IsNullOrWhiteSpace(req.ColTotal)         ? null : req.ColTotal.Trim();
             existing.ColInvoiceNumber = string.IsNullOrWhiteSpace(req.ColInvoiceNumber) ? null : req.ColInvoiceNumber.Trim();
-            existing.UpdatedAt       = DateTime.UtcNow;
+            existing.UpdatedAt        = DateTime.UtcNow;
         }
 
         await _db.SaveChangesAsync();
@@ -70,6 +72,6 @@ public class ComparisonCriteriaService : IComparisonCriteriaService
     private static ComparisonCriteriaDto ToDto(ComparisonCriteria c) =>
         new(c.Id, c.SupplierId, c.MatchColumn, c.Format,
             c.ColPrice, c.MatchColX, c.PriceColX,
-            c.ColDescription, c.ColQuantity, c.ColTotal, c.ColInvoiceNumber,
+            c.ColDescription, c.ColMFR, c.ColQuantity, c.ColTotal, c.ColInvoiceNumber,
             c.CreatedAt, c.UpdatedAt);
 }

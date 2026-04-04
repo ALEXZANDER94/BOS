@@ -67,6 +67,20 @@ public class GlossaryController : ControllerBase
         return deleted ? NoContent() : NotFound();
     }
 
+    // POST /api/supplier/1/glossary/bulk-update-prices
+    // Body: { items: [{ catalogNumber, newPrice }] }
+    // Updates ContractedPrice for each matched catalog number. Returns counts of updated/skipped.
+    [HttpPost("bulk-update-prices")]
+    public async Task<IActionResult> BulkUpdatePrices(
+        [FromRoute] int supplierId, [FromBody] BulkUpdateGlossaryPricesRequest request)
+    {
+        if (request.Items.Count == 0)
+            return BadRequest(new { message = "No items provided." });
+
+        var result = await _glossary.BulkUpdatePricesAsync(supplierId, request);
+        return Ok(result);
+    }
+
     // POST /api/supplier/1/glossary/import
     // Body: multipart/form-data with a single "file" field containing the CSV.
     // Returns 200 OK with a CsvImportResultDto even on partial success.

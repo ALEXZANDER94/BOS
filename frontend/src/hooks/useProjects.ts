@@ -15,10 +15,11 @@ export function useProjects(clientId: number) {
   })
 }
 
-export function useAllProjects(search?: string, status?: string, clientId?: number) {
+export function useAllProjects(search?: string, status?: string, clientId?: number, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['all-projects', search, status, clientId],
     queryFn:  () => allProjectsApi.getAll(search, status, clientId),
+    enabled:  options?.enabled !== false,
   })
 }
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Pencil, Trash2, Check, X, UserPlus } from 'lucide-react'
@@ -298,7 +299,7 @@ export default function ProjectsPanel({ clientId }: ProjectsPanelProps) {
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{project.name}</span>
+                  <Link to={`/projects/${project.id}`} className="font-medium text-sm hover:underline">{project.name}</Link>
                   <Badge
                     variant="outline"
                     className={`text-[10px] ${STATUS_COLORS[project.status] ?? ''}`}

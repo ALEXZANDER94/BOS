@@ -27,7 +27,8 @@ function fmtPct(n: number) {
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 }
 
-type AddState = 'idle' | 'adding' | 'done'
+type AddState    = 'idle' | 'adding' | 'done'
+type UpdateState = 'idle' | 'updating' | 'done'
 
 export default function ComparisonTable({
   results,
@@ -36,12 +37,29 @@ export default function ComparisonTable({
   onReviewUnmatched,
   reviewState = 'idle',
 }: ComparisonTableProps) {
-  const [addState, setAddState] = useState<AddState>('idle')
+  const [addState, setAddState]       = useState<AddState>('idle')
+  const [updateState, setUpdateState] = useState<UpdateState>('idle')
 
   const overpriced     = results.filter(r => r.isOverpriced && !r.isNewItem && !r.isNeedsReview).length
   const newItems       = results.filter(r => r.isNewItem).length
   const unmatchedCount = results.filter(r => r.isNeedsReview).length
   const netImpact      = results.reduce((sum, r) => sum + r.dollarDifference, 0)
+
+  const handleUpdatePrices = async () => {
+    setUpdateState('updating')
+    const matchedRows = results.filter(r => !r.isNewItem && !r.isNeedsReview)
+    try {
+      const result = await glossaryApi.bulkUpdatePrices(
+        supplierId,
+        matchedRows.map(r => ({ catalogNumber: r.catalogNumber, newPrice: r.proposedPrice }))
+      )
+      setUpdateState('done')
+      toast.success(`${result.updatedCount} price${result.updatedCount !== 1 ? 's' : ''} updated in the glossary.`)
+    } catch {
+      setUpdateState('idle')
+      toast.error('Failed to update glossary prices.')
+    }
+  }
 
   const handleAddAll = async () => {
     setAddState('adding')
@@ -129,6 +147,33 @@ export default function ComparisonTable({
             {currency.format(netImpact)}
           </span>
         </div>
+
+        {/* Update matched prices chip */}
+        {results.filter(r => !r.isNewItem && !r.isNeedsReview).length > 0 && updateState === 'idle' && (
+          <button
+            onClick={handleUpdatePrices}
+            className="rounded-md border bg-blue-50 px-4 py-2 text-sm text-left transition-colors hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/40 cursor-pointer"
+          >
+            <span className="text-muted-foreground">Matched: </span>
+            <span className="font-semibold text-blue-700 dark:text-blue-400">
+              {results.filter(r => !r.isNewItem && !r.isNeedsReview).length}
+            </span>
+            <span className="ml-2 text-xs text-blue-600 dark:text-blue-400 font-medium">
+              — Update master prices →
+            </span>
+          </button>
+        )}
+        {results.filter(r => !r.isNewItem && !r.isNeedsReview).length > 0 && updateState === 'updating' && (
+          <div className="rounded-md border bg-blue-50 px-4 py-2 text-sm dark:bg-blue-950/20">
+            <span className="text-muted-foreground animate-pulse">Updating prices…</span>
+          </div>
+        )}
+        {results.filter(r => !r.isNewItem && !r.isNeedsReview).length > 0 && updateState === 'done' && (
+          <div className="rounded-md border bg-green-50 px-4 py-2 text-sm dark:bg-green-950/20">
+            <span className="text-muted-foreground">Master prices: </span>
+            <span className="font-semibold text-green-700 dark:text-green-400">✓ Updated</span>
+          </div>
+        )}
 
         {/* Unmatched rows chip */}
         {unmatchedCount > 0 && reviewState === 'idle' && onReviewUnmatched && (

@@ -54,25 +54,82 @@ public class EmailAssignmentsController : ControllerBase
         if (!await _gmail.HasValidTokenAsync(userEmail))
             return BadRequest(new { error = "Gmail not connected." });
 
-        var messageIds = await _db.EmailAssignments
-            .Where(a => a.CategoryId == categoryId)
-            .Select(a => a.MessageId)
-            .ToListAsync();
-
-        if (messageIds.Count == 0)
-            return Ok(new { emails = Array.Empty<object>(), assignments = Array.Empty<object>() });
-
-        var emails      = await _gmail.GetEmailsByIdsAsync(userEmail, messageIds);
-        var assignments = await _db.EmailAssignments
+        // Load full assignment records (with navigation props) so we have AssignedByUserEmail
+        // for cross-user resolution, and Category/Status for the DTO mapping at the end.
+        var storedAssignments = await _db.EmailAssignments
             .Include(a => a.Category)
             .Include(a => a.Status)
-            .Where(a => messageIds.Contains(a.MessageId))
+            .Where(a => a.CategoryId == categoryId)
             .ToListAsync();
 
+        if (storedAssignments.Count == 0)
+            return Ok(new { emails = Array.Empty<object>(), assignments = Array.Empty<object>() });
+
+        // Resolve each stored message key to the current user's local Gmail ID.
+        //
+        // Keys may be:
+        //   • RFC 2822 Message-IDs  (contain '@') — stable cross-user; find via rfc822msgid search
+        //   • Legacy per-user Gmail IDs (hex, no '@') — stored before the RFC-ID migration
+        //
+        // For legacy IDs assigned by a DIFFERENT user we attempt a two-step resolution:
+        //   1. Fetch the RFC ID from the assigning user's Gmail (lightweight metadata fetch)
+        //   2. Search the current user's Gmail for that RFC ID
+        // On success we also migrate the stored key to the RFC ID (lazy migration) so future
+        // queries skip this extra round-trip. Any failure is silently skipped.
+
+        var gmailIds          = new List<string>(storedAssignments.Count);
+        bool anyMigrated      = false;
+
+        foreach (var a in storedAssignments)
+        {
+            var id = a.MessageId;
+
+            if (id.Contains('@'))
+            {
+                // RFC ID path — resolve to current user's local Gmail ID.
+                var localId = await _gmail.FindMessageByRfcIdAsync(userEmail, id);
+                if (localId != null) gmailIds.Add(localId);
+            }
+            else if (a.AssignedByUserEmail == userEmail)
+            {
+                // Same user's legacy Gmail ID — still valid for them.
+                gmailIds.Add(id);
+            }
+            else
+            {
+                // Cross-user legacy Gmail ID — attempt resolution via the assigning user's token.
+                if (await _gmail.HasValidTokenAsync(a.AssignedByUserEmail))
+                {
+                    var rfcId = await _gmail.GetRfcMessageIdAsync(a.AssignedByUserEmail, id);
+                    if (!string.IsNullOrEmpty(rfcId))
+                    {
+                        var localId = await _gmail.FindMessageByRfcIdAsync(userEmail, rfcId);
+                        if (localId != null)
+                        {
+                            gmailIds.Add(localId);
+                            // Lazy migrate: store the RFC ID so all users share the same key.
+                            a.MessageId  = rfcId;
+                            anyMigrated  = true;
+                        }
+                    }
+                }
+                // If resolution fails, this email is inaccessible to the current user — skip silently.
+            }
+        }
+
+        if (anyMigrated)
+            await _db.SaveChangesAsync();
+
+        var emails = gmailIds.Count > 0
+            ? await _gmail.GetEmailsByIdsAsync(userEmail, gmailIds)
+            : (IReadOnlyList<EmailSummaryDto>)Array.Empty<EmailSummaryDto>();
+
+        // storedAssignments already has navigation props loaded (includes above).
+        // After lazy migration, MessageId fields reflect the RFC IDs — use as-is.
         return Ok(new
         {
             emails      = emails,
-            assignments = assignments.Select(ToDto),
+            assignments = storedAssignments.Select(ToDto),
         });
     }
 

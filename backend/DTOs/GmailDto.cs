@@ -13,7 +13,8 @@ public record EmailSummaryDto(
     int?     ClientId,
     string?  ClientName,
     int?     ContactId,
-    string?  ContactName
+    string?  ContactName,
+    string?  RfcMessageId
 );
 
 public record AttachmentMetaDto(
@@ -38,7 +39,8 @@ public record EmailDetailDto(
     string?  ClientName,
     int?     ContactId,
     string?  ContactName,
-    List<AttachmentMetaDto> Attachments
+    List<AttachmentMetaDto> Attachments,
+    string?  RfcMessageId
 );
 
 public record EmailListResponse(

@@ -9,5 +9,6 @@ public class Building
     public string Name        { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
 
-    public ICollection<Lot> Lots { get; set; } = [];
+    public ICollection<Lot>     Lots     { get; set; } = [];
+    public ICollection<Fixture> Fixtures { get; set; } = [];
 }

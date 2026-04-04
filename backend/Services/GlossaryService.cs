@@ -21,6 +21,7 @@ public interface IGlossaryService
     Task<(GlossaryUnitDto? Unit, string? Error)> UpdateAsync(int supplierId, int id, UpdateGlossaryUnitRequest request);
     Task<bool> DeleteAsync(int supplierId, int id);
     Task<CsvImportResultDto> ImportFromCsvAsync(int supplierId, Stream csvStream, bool overwrite = false);
+    Task<BulkUpdateGlossaryPricesResult> BulkUpdatePricesAsync(int supplierId, BulkUpdateGlossaryPricesRequest request);
 }
 
 public class GlossaryService : IGlossaryService
@@ -271,6 +272,43 @@ public class GlossaryService : IGlossaryService
             ErrorCount:    errors.Count(e => !e.Reason.Contains("skipped")),
             Errors:        errors
         );
+    }
+
+    public async Task<BulkUpdateGlossaryPricesResult> BulkUpdatePricesAsync(
+        int supplierId, BulkUpdateGlossaryPricesRequest request)
+    {
+        if (request.Items.Count == 0)
+            return new BulkUpdateGlossaryPricesResult(0, 0);
+
+        var catalogNumbers = request.Items.Select(i => i.CatalogNumber.ToLower()).ToHashSet();
+
+        var units = await _db.GlossaryUnits
+            .Where(u => u.SupplierId == supplierId && catalogNumbers.Contains(u.CatalogNumber.ToLower()))
+            .ToListAsync();
+
+        var unitMap = units.ToDictionary(u => u.CatalogNumber.ToLower());
+
+        int updated = 0;
+        int skipped = 0;
+
+        foreach (var item in request.Items)
+        {
+            if (unitMap.TryGetValue(item.CatalogNumber.ToLower(), out var unit))
+            {
+                unit.ContractedPrice = item.NewPrice;
+                unit.UpdatedAt       = DateTime.UtcNow;
+                updated++;
+            }
+            else
+            {
+                skipped++;
+            }
+        }
+
+        if (updated > 0)
+            await _db.SaveChangesAsync();
+
+        return new BulkUpdateGlossaryPricesResult(updated, skipped);
     }
 
     // Static helper to map the EF entity to the DTO we send to the frontend.

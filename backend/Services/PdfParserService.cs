@@ -68,7 +68,7 @@ public class PdfParserService : IPdfParserService
             criteria.MatchColumn, criteria.Format,
             criteria.ColPrice,
             criteria.MatchColX, criteria.PriceColX,
-            criteria.ColDescription, criteria.ColQuantity,
+            criteria.ColDescription, criteria.ColMFR, criteria.ColQuantity,
             criteria.ColTotal, criteria.ColInvoiceNumber,
             criteria.CreatedAt, criteria.UpdatedAt);
 

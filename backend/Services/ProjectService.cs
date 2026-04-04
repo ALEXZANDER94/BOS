@@ -19,7 +19,7 @@ public interface IProjectService
     Task<bool>                              DeleteAsync(int clientId, int id);
     Task                                    AssignContactAsync(int clientId, int projectId, int contactId);
     Task                                    UnassignContactAsync(int clientId, int projectId, int contactId);
-    Task<PoCsvImportResultDto>              ImportPurchaseOrdersAsync(int projectId, IFormFile file);
+    Task<PoCsvImportResultDto>              ImportPurchaseOrdersAsync(int projectId, IFormFile file, IReadOnlySet<string>? orderNumbersToUpdate = null);
     Task<ProjectCsvImportResultDto>         ImportProjectsAsync(IFormFile file);
 }
 
@@ -202,10 +202,12 @@ public class ProjectService : IProjectService
         }
     }
 
-    public async Task<PoCsvImportResultDto> ImportPurchaseOrdersAsync(int projectId, IFormFile file)
+    public async Task<PoCsvImportResultDto> ImportPurchaseOrdersAsync(int projectId, IFormFile file, IReadOnlySet<string>? orderNumbersToUpdate = null)
     {
         var errors           = new List<PoCsvRowError>();
+        var conflicts        = new List<PoCsvConflict>();
         int importedCount    = 0;
+        int updatedCount     = 0;
         int skippedCount     = 0;
         int buildingsCreated = 0;
         int lotsCreated      = 0;
@@ -216,16 +218,19 @@ public class ProjectService : IProjectService
             .Include(b => b.Lots)
             .ToListAsync();
 
-        // Load existing PO order numbers to detect duplicates
-        var existingOrderNumbers = (await _db.PurchaseOrders
+        // Load existing POs to detect duplicates
+        var existingPos = await _db.PurchaseOrders
+            .Include(po => po.Lot).ThenInclude(l => l!.Building)
             .Where(po => po.ProjectId == projectId)
-            .Select(po => po.OrderNumber.ToLower())
-            .ToListAsync()).ToHashSet();
+            .ToListAsync();
+
+        var existingPoByOrderNumber = existingPos
+            .ToDictionary(po => po.OrderNumber.ToLower(), po => po);
 
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
-            HasHeaderRecord  = true,
-            TrimOptions      = TrimOptions.Trim,
+            HasHeaderRecord   = true,
+            TrimOptions       = TrimOptions.Trim,
             MissingFieldFound = null,
         };
 
@@ -282,69 +287,117 @@ public class ProjectService : IProjectService
                 continue;
             }
 
-            // Skip duplicate order number
-            if (existingOrderNumbers.Contains(orderNumber.ToLower()))
+            // Handle duplicate order number
+            if (existingPoByOrderNumber.TryGetValue(orderNumber.ToLower(), out var existingPo))
             {
-                skippedCount++;
-                errors.Add(new PoCsvRowError(rowNumber, orderNumber, "Order number already exists — skipped."));
+                if (orderNumbersToUpdate != null && orderNumbersToUpdate.Contains(orderNumber, StringComparer.OrdinalIgnoreCase))
+                {
+                    // User chose to update this PO — resolve lot and update
+                    var building = buildings.FirstOrDefault(b =>
+                        string.Equals(b.Name, buildingName, StringComparison.OrdinalIgnoreCase));
+
+                    if (building is null)
+                    {
+                        building = new Building { ProjectId = projectId, Name = buildingName, Description = "", Lots = new List<Lot>() };
+                        _db.Buildings.Add(building);
+                        await _db.SaveChangesAsync();
+                        buildings.Add(building);
+                        buildingsCreated++;
+                    }
+
+                    var lot = building.Lots.FirstOrDefault(l =>
+                        string.Equals(l.Name, lotName, StringComparison.OrdinalIgnoreCase));
+
+                    if (lot is null)
+                    {
+                        lot = new Lot { BuildingId = building.Id, Name = lotName, Description = "" };
+                        _db.Lots.Add(lot);
+                        await _db.SaveChangesAsync();
+                        building.Lots.Add(lot);
+                        lotsCreated++;
+                    }
+
+                    existingPo.LotId     = lot.Id;
+                    existingPo.Amount    = amount;
+                    existingPo.QbStatus  = status;
+                    existingPo.UpdatedAt = now;
+                    updatedCount++;
+                }
+                else if (orderNumbersToUpdate == null)
+                {
+                    // First pass — surface as a conflict for user to resolve
+                    conflicts.Add(new PoCsvConflict(
+                        rowNumber,
+                        orderNumber,
+                        existingPo.Lot?.Name ?? "",
+                        lotName,
+                        existingPo.Amount,
+                        amount));
+                }
+                else
+                {
+                    // Second pass — user chose to keep existing
+                    skippedCount++;
+                }
                 continue;
             }
 
             // Resolve or create building
-            var building = buildings.FirstOrDefault(b =>
+            var newBuilding = buildings.FirstOrDefault(b =>
                 string.Equals(b.Name, buildingName, StringComparison.OrdinalIgnoreCase));
 
-            if (building is null)
+            if (newBuilding is null)
             {
-                building = new Building
+                newBuilding = new Building
                 {
                     ProjectId   = projectId,
                     Name        = buildingName,
                     Description = "",
                     Lots        = new List<Lot>(),
                 };
-                _db.Buildings.Add(building);
+                _db.Buildings.Add(newBuilding);
                 await _db.SaveChangesAsync();
-                buildings.Add(building);
+                buildings.Add(newBuilding);
                 buildingsCreated++;
             }
 
             // Resolve or create lot
-            var lot = building.Lots.FirstOrDefault(l =>
+            var newLot = newBuilding.Lots.FirstOrDefault(l =>
                 string.Equals(l.Name, lotName, StringComparison.OrdinalIgnoreCase));
 
-            if (lot is null)
+            if (newLot is null)
             {
-                lot = new Lot
+                newLot = new Lot
                 {
-                    BuildingId  = building.Id,
+                    BuildingId  = newBuilding.Id,
                     Name        = lotName,
                     Description = "",
                 };
-                _db.Lots.Add(lot);
+                _db.Lots.Add(newLot);
                 await _db.SaveChangesAsync();
-                building.Lots.Add(lot);
+                newBuilding.Lots.Add(newLot);
                 lotsCreated++;
             }
 
-            _db.PurchaseOrders.Add(new PurchaseOrder
+            var newPo = new PurchaseOrder
             {
                 ProjectId   = projectId,
-                LotId       = lot.Id,
+                LotId       = newLot.Id,
                 OrderNumber = orderNumber,
                 Amount      = amount,
                 QbStatus    = status,
                 CreatedAt   = now,
                 UpdatedAt   = now,
-            });
-
-            existingOrderNumbers.Add(orderNumber.ToLower());
+            };
+            _db.PurchaseOrders.Add(newPo);
+            existingPoByOrderNumber[orderNumber.ToLower()] = newPo;
             importedCount++;
         }
 
         await _db.SaveChangesAsync();
 
-        return new PoCsvImportResultDto(importedCount, skippedCount, errors.Count(e => !e.Reason.Contains("skipped")), buildingsCreated, lotsCreated, errors);
+        return new PoCsvImportResultDto(importedCount, updatedCount, skippedCount,
+            errors.Count, buildingsCreated, lotsCreated, errors, conflicts);
     }
 
     public async Task<ProjectCsvImportResultDto> ImportProjectsAsync(IFormFile file)

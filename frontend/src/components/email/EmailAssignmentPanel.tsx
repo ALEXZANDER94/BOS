@@ -10,11 +10,15 @@ import { useEmailAssignment, useUpsertAssignment, useRemoveAssignment } from '@/
 
 interface Props {
   messageId: string
+  noteKey?:  string   // RFC Message-ID when available — used as the stable cross-user assignment key
 }
 
-export function EmailAssignmentPanel({ messageId }: Props) {
+export function EmailAssignmentPanel({ messageId, noteKey }: Props) {
+  // Use the RFC Message-ID as the canonical key so all group members share the same assignment.
+  const key = noteKey ?? messageId
+
   const { data: categories = [] }  = useEmailCategories()
-  const { data: assignment }        = useEmailAssignment(messageId)
+  const { data: assignment }        = useEmailAssignment(key)
   const upsert                      = useUpsertAssignment()
   const remove                      = useRemoveAssignment()
 
@@ -35,13 +39,13 @@ export function EmailAssignmentPanel({ messageId }: Props) {
     if (isNaN(catId)) return
     const statusId = pendingStatusId === 'none' ? null : parseInt(pendingStatusId)
     upsert.mutate(
-      { messageId, categoryId: catId, statusId },
+      { messageId: key, categoryId: catId, statusId },
       { onSuccess: () => setEditing(false) }
     )
   }
 
   function handleRemove() {
-    remove.mutate(messageId)
+    remove.mutate(key)
   }
 
   // ── Editing mode ──────────────────────────────────────────────────────────

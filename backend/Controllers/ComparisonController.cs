@@ -82,6 +82,7 @@ public class ComparisonController : ControllerBase
             Format           = criteriaDto.Format,
             ColPrice         = criteriaDto.ColPrice,
             ColDescription   = criteriaDto.ColDescription,
+            ColMFR           = criteriaDto.ColMFR,
             ColQuantity      = criteriaDto.ColQuantity,
             ColTotal         = criteriaDto.ColTotal,
             ColInvoiceNumber = criteriaDto.ColInvoiceNumber,
@@ -176,6 +177,7 @@ public class ComparisonController : ControllerBase
         string? suggestedMatchColumn          = null;
         string? suggestedPriceColumn          = null;
         string? suggestedDescriptionColumn    = null;
+        string? suggestedMfrColumn            = null;
         string? suggestedQuantityColumn       = null;
         string? suggestedTotalColumn          = null;
         string? suggestedInvoiceNumberColumn  = null;
@@ -197,6 +199,9 @@ public class ComparisonController : ControllerBase
                         score++;
                     if (!string.IsNullOrEmpty(criteriaDto.ColDescription) &&
                         h.Contains(criteriaDto.ColDescription, StringComparison.OrdinalIgnoreCase))
+                        score++;
+                    if (!string.IsNullOrEmpty(criteriaDto.ColMFR) &&
+                        h.Contains(criteriaDto.ColMFR, StringComparison.OrdinalIgnoreCase))
                         score++;
                     if (!string.IsNullOrEmpty(criteriaDto.ColQuantity) &&
                         h.Contains(criteriaDto.ColQuantity, StringComparison.OrdinalIgnoreCase))
@@ -226,6 +231,7 @@ public class ComparisonController : ControllerBase
             suggestedMatchColumn         = FindHeader(criteriaDto.MatchColumn);
             suggestedPriceColumn         = FindHeader(criteriaDto.ColPrice);
             suggestedDescriptionColumn   = FindHeader(criteriaDto.ColDescription);
+            suggestedMfrColumn           = FindHeader(criteriaDto.ColMFR);
             suggestedQuantityColumn      = FindHeader(criteriaDto.ColQuantity);
             suggestedTotalColumn         = FindHeader(criteriaDto.ColTotal);
             suggestedInvoiceNumberColumn = FindHeader(criteriaDto.ColInvoiceNumber);
@@ -238,6 +244,7 @@ public class ComparisonController : ControllerBase
             SuggestedMatchColumn:        suggestedMatchColumn,
             SuggestedPriceColumn:        suggestedPriceColumn,
             SuggestedDescriptionColumn:  suggestedDescriptionColumn,
+            SuggestedMfrColumn:          suggestedMfrColumn,
             SuggestedQuantityColumn:     suggestedQuantityColumn,
             SuggestedTotalColumn:        suggestedTotalColumn,
             SuggestedInvoiceNumberColumn: suggestedInvoiceNumberColumn
@@ -296,6 +303,7 @@ public class ComparisonController : ControllerBase
             Format           = existingCriteria?.Format ?? string.Empty,
             ColPrice         = request.ColPrice,
             ColDescription   = string.IsNullOrWhiteSpace(request.ColDescription)   ? null : request.ColDescription,
+            ColMFR           = string.IsNullOrWhiteSpace(request.ColMFR)           ? null : request.ColMFR,
             ColQuantity      = string.IsNullOrWhiteSpace(request.ColQuantity)      ? null : request.ColQuantity,
             ColTotal         = string.IsNullOrWhiteSpace(request.ColTotal)         ? null : request.ColTotal,
             ColInvoiceNumber = string.IsNullOrWhiteSpace(request.ColInvoiceNumber) ? null : request.ColInvoiceNumber,
@@ -311,6 +319,7 @@ public class ComparisonController : ControllerBase
                 MatchColX:        existingCriteria?.MatchColX,
                 PriceColX:        existingCriteria?.PriceColX,
                 ColDescription:   string.IsNullOrWhiteSpace(request.ColDescription)   ? null : request.ColDescription,
+                ColMFR:           string.IsNullOrWhiteSpace(request.ColMFR)           ? null : request.ColMFR,
                 ColQuantity:      string.IsNullOrWhiteSpace(request.ColQuantity)      ? null : request.ColQuantity,
                 ColTotal:         string.IsNullOrWhiteSpace(request.ColTotal)         ? null : request.ColTotal,
                 ColInvoiceNumber: string.IsNullOrWhiteSpace(request.ColInvoiceNumber) ? null : request.ColInvoiceNumber
@@ -393,6 +402,7 @@ public class ComparisonController : ControllerBase
         string? suggestedMatchColumn          = null;
         string? suggestedPriceColumn          = null;
         string? suggestedDescriptionColumn    = null;
+        string? suggestedMfrColumn            = null;
         string? suggestedQuantityColumn       = null;
         string? suggestedTotalColumn          = null;
         string? suggestedInvoiceNumberColumn  = null;
@@ -411,6 +421,8 @@ public class ComparisonController : ControllerBase
                         h.Contains(criteriaDto.ColPrice, StringComparison.OrdinalIgnoreCase)) score++;
                     if (!string.IsNullOrEmpty(criteriaDto.ColDescription) &&
                         h.Contains(criteriaDto.ColDescription, StringComparison.OrdinalIgnoreCase)) score++;
+                    if (!string.IsNullOrEmpty(criteriaDto.ColMFR) &&
+                        h.Contains(criteriaDto.ColMFR, StringComparison.OrdinalIgnoreCase)) score++;
                     if (!string.IsNullOrEmpty(criteriaDto.ColQuantity) &&
                         h.Contains(criteriaDto.ColQuantity, StringComparison.OrdinalIgnoreCase)) score++;
                     if (!string.IsNullOrEmpty(criteriaDto.ColTotal) &&
@@ -432,6 +444,7 @@ public class ComparisonController : ControllerBase
             suggestedQuantityColumn      = FindHeader(criteriaDto.ColQuantity);
             suggestedTotalColumn         = FindHeader(criteriaDto.ColTotal);
             suggestedInvoiceNumberColumn = FindHeader(criteriaDto.ColInvoiceNumber);
+            suggestedMfrColumn           = FindHeader(criteriaDto.ColMFR);
 
             // For description, use saved criteria first; fall back to auto-detecting a
             // header containing "description" when ColDescription is not configured.
@@ -455,6 +468,7 @@ public class ComparisonController : ControllerBase
             SuggestedMatchColumn:        suggestedMatchColumn,
             SuggestedPriceColumn:        suggestedPriceColumn,
             SuggestedDescriptionColumn:  suggestedDescriptionColumn,
+            SuggestedMfrColumn:          suggestedMfrColumn,
             SuggestedQuantityColumn:     suggestedQuantityColumn,
             SuggestedTotalColumn:        suggestedTotalColumn,
             SuggestedInvoiceNumberColumn: suggestedInvoiceNumberColumn
@@ -507,6 +521,7 @@ public class ComparisonController : ControllerBase
             Format           = existingCriteria?.Format ?? string.Empty,
             ColPrice         = request.ColPrice,
             ColDescription   = string.IsNullOrWhiteSpace(request.ColDescription)   ? null : request.ColDescription,
+            ColMFR           = string.IsNullOrWhiteSpace(request.ColMFR)           ? null : request.ColMFR,
             ColQuantity      = string.IsNullOrWhiteSpace(request.ColQuantity)      ? null : request.ColQuantity,
             ColTotal         = string.IsNullOrWhiteSpace(request.ColTotal)         ? null : request.ColTotal,
             ColInvoiceNumber = string.IsNullOrWhiteSpace(request.ColInvoiceNumber) ? null : request.ColInvoiceNumber,
@@ -521,6 +536,7 @@ public class ComparisonController : ControllerBase
                 MatchColX:        existingCriteria?.MatchColX,
                 PriceColX:        existingCriteria?.PriceColX,
                 ColDescription:   string.IsNullOrWhiteSpace(request.ColDescription)   ? null : request.ColDescription,
+                ColMFR:           string.IsNullOrWhiteSpace(request.ColMFR)           ? null : request.ColMFR,
                 ColQuantity:      string.IsNullOrWhiteSpace(request.ColQuantity)      ? null : request.ColQuantity,
                 ColTotal:         string.IsNullOrWhiteSpace(request.ColTotal)         ? null : request.ColTotal,
                 ColInvoiceNumber: string.IsNullOrWhiteSpace(request.ColInvoiceNumber) ? null : request.ColInvoiceNumber

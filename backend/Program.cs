@@ -165,6 +165,9 @@ builder.Services.AddScoped<IActivityLogService,         ActivityLogService>();
 // QuickBooks
 builder.Services.AddScoped<IQuickBooksService,          QuickBooksService>();
 
+// Fixtures
+builder.Services.AddScoped<IFixtureService,             FixtureService>();
+
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------

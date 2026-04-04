@@ -104,7 +104,6 @@ public class SpreadsheetParserService : ISpreadsheetParserService
         int idxPrice       = ResolveColIndex(colIndex, criteria.ColPrice);
         // Optional dedicated Description column — if the supplier's spreadsheet has a
         // separate Description column, we read it directly in addition to the format parse.
-        // MFR is always extracted from the match-key cell via the Format template.
         int idxDescription = string.IsNullOrWhiteSpace(criteria.ColDescription)
                              ? -1 : ResolveColIndex(colIndex, criteria.ColDescription!);
         // Auto-detect description column: if ColDescription is not configured, scan headers
@@ -116,6 +115,9 @@ public class SpreadsheetParserService : ISpreadsheetParserService
             if (descEntry.Key is not null)
                 idxDescription = descEntry.Value;
         }
+        // Optional dedicated MFR column — takes precedence over the Format template parse.
+        int idxMfr = string.IsNullOrWhiteSpace(criteria.ColMFR)
+                     ? -1 : ResolveColIndex(colIndex, criteria.ColMFR!);
         // Optional quantity column
         int idxQuantity = string.IsNullOrWhiteSpace(criteria.ColQuantity)
                           ? -1 : ResolveColIndex(colIndex, criteria.ColQuantity!);
@@ -145,9 +147,13 @@ public class SpreadsheetParserService : ISpreadsheetParserService
             if (!TryParsePrice(priceRaw, out decimal price)) continue;
 
             // Read dedicated Description column if mapped (or auto-detected).
-            // MFR is always extracted from the match-key cell via the Format template.
             string? directDescription = idxDescription > 0
                 ? NullIfEmpty(row.Cell(idxDescription).GetString().Trim())
+                : null;
+
+            // Read dedicated MFR column if mapped; overrides the Format template parse.
+            string? directMfr = idxMfr > 0
+                ? NullIfEmpty(row.Cell(idxMfr).GetString().Trim())
                 : null;
 
             // Read quantity — how many units the listed price covers (defaults to 1).
@@ -176,7 +182,7 @@ public class SpreadsheetParserService : ISpreadsheetParserService
                 : string.Empty;
 
             var unit = BuildParsedUnit(rawCriteriaCell, price, criteria.Format,
-                                       directDescription, quantity, proposedTotal, invoiceNumber);
+                                       directDescription, directMfr, quantity, proposedTotal, invoiceNumber);
             results.Add(unit);
         }
 
@@ -225,6 +231,8 @@ public class SpreadsheetParserService : ISpreadsheetParserService
             if (descEntry.Key is not null)
                 idxDescription = descEntry.Value;
         }
+        int idxMfr = string.IsNullOrWhiteSpace(criteria.ColMFR)
+                     ? -1 : ResolveColIndex(colIndex, criteria.ColMFR!);
         int idxQuantity = string.IsNullOrWhiteSpace(criteria.ColQuantity)
                           ? -1 : ResolveColIndex(colIndex, criteria.ColQuantity!);
         int idxTotal = string.IsNullOrWhiteSpace(criteria.ColTotal)
@@ -244,6 +252,10 @@ public class SpreadsheetParserService : ISpreadsheetParserService
 
             string? directDescription = idxDescription >= 0
                 ? NullIfEmpty(SafeGetField(csv, idxDescription))
+                : null;
+
+            string? directMfr = idxMfr >= 0
+                ? NullIfEmpty(SafeGetField(csv, idxMfr))
                 : null;
 
             decimal quantity = 1m;
@@ -269,7 +281,7 @@ public class SpreadsheetParserService : ISpreadsheetParserService
                 : string.Empty;
 
             var unit = BuildParsedUnit(rawCriteriaCell, price, criteria.Format,
-                                       directDescription, quantity, proposedTotal, invoiceNumber);
+                                       directDescription, directMfr, quantity, proposedTotal, invoiceNumber);
             results.Add(unit);
         }
 
@@ -308,10 +320,10 @@ public class SpreadsheetParserService : ISpreadsheetParserService
 
     /// <summary>
     /// Builds a ParsedPdfUnit from the raw combined-key cell and price.
-    /// MFR is always extracted from the match-key cell via the Format template parse;
-    /// it is never overridden by a direct column read.
-    /// When <paramref name="directDescription"/> is supplied (read from a dedicated
-    /// Description column) it takes precedence over the description extracted by CriteriaParser.
+    /// When <paramref name="directDescription"/> is supplied it takes precedence over
+    /// the description extracted by CriteriaParser.
+    /// When <paramref name="directMfr"/> is supplied it takes precedence over the MFR
+    /// extracted from the match-key cell via the Format template.
     /// Falls back to NeedsReview=true only if CatalogNumber cannot be determined at all.
     /// </summary>
     private static ParsedPdfUnit BuildParsedUnit(
@@ -319,6 +331,7 @@ public class SpreadsheetParserService : ISpreadsheetParserService
         decimal price,
         string  formatTemplate,
         string? directDescription = null,
+        string? directMfr         = null,
         decimal quantity          = 1m,
         decimal proposedTotal     = 0m,
         string  invoiceNumber     = "")
@@ -329,12 +342,12 @@ public class SpreadsheetParserService : ISpreadsheetParserService
 
         if (parsed is not null)
         {
-            // MFR always comes from the format template parse.
-            // Description can be overridden by a dedicated column when configured.
+            // directMfr (from a dedicated MFR column) takes precedence over the template parse.
+            // directDescription (from a dedicated Description column) takes precedence over parsed description.
             return new ParsedPdfUnit(
                 CatalogNumber:    parsed.CatalogNumber,
                 Description:      directDescription ?? parsed.Description,
-                MFR:              parsed.MFR,
+                MFR:              directMfr ?? parsed.MFR,
                 ProposedPrice:    price,
                 NeedsReview:      false,
                 RawCriteriaCell:  string.Empty,
@@ -345,14 +358,14 @@ public class SpreadsheetParserService : ISpreadsheetParserService
         }
 
         // CriteriaParser couldn't extract a catalog number at all.
-        // If we have a direct description column we can still emit a useful record;
+        // If we have direct column data we can still emit a useful record;
         // treat the raw match-cell value as the catalog number (best effort).
-        if (directDescription is not null)
+        if (directDescription is not null || directMfr is not null)
         {
             return new ParsedPdfUnit(
                 CatalogNumber:    rawCriteriaCell,
-                Description:      directDescription,
-                MFR:              string.Empty,
+                Description:      directDescription ?? rawCriteriaCell,
+                MFR:              directMfr ?? string.Empty,
                 ProposedPrice:    price,
                 NeedsReview:      false,
                 RawCriteriaCell:  string.Empty,

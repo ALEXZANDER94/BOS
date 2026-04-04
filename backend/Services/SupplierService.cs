@@ -102,7 +102,7 @@ public class SupplierService : ISupplierService
                 s.Criteria.MatchColumn, s.Criteria.Format,
                 s.Criteria.ColPrice,
                 s.Criteria.MatchColX, s.Criteria.PriceColX,
-                s.Criteria.ColDescription, s.Criteria.ColQuantity,
+                s.Criteria.ColDescription, s.Criteria.ColMFR, s.Criteria.ColQuantity,
                 s.Criteria.ColTotal, s.Criteria.ColInvoiceNumber,
                 s.Criteria.CreatedAt, s.Criteria.UpdatedAt));
 }

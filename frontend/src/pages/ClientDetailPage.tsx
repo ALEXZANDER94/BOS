@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ContactsPanel from '@/components/clients/ContactsPanel'
 import ProjectsPanel from '@/components/clients/ProjectsPanel'
 import ActivityPanel from '@/components/clients/ActivityPanel'
+import ClientOptionsTab from '@/components/clients/ClientOptionsTab'
 import EditClientModal from '@/components/clients/EditClientModal'
 import DeleteClientModal from '@/components/clients/DeleteClientModal'
 import { useClient } from '@/hooks/useClients'
@@ -169,6 +170,7 @@ export default function ClientDetailPage() {
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="options">Options</TabsTrigger>
         </TabsList>
 
         <TabsContent value="contacts" className="mt-5 max-w-2xl">
@@ -179,6 +181,9 @@ export default function ClientDetailPage() {
         </TabsContent>
         <TabsContent value="activity" className="mt-5 max-w-2xl">
           <ActivityPanel clientId={client.id} />
+        </TabsContent>
+        <TabsContent value="options" className="mt-5">
+          <ClientOptionsTab clientId={client.id} />
         </TabsContent>
       </Tabs>
 

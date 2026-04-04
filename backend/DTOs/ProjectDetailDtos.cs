@@ -107,13 +107,36 @@ public record QuickBooksStatusDto(bool Connected, string? RealmId);
 
 public record PoCsvRowError(int RowNumber, string OrderNumber, string Reason);
 
+public record PoCsvConflict(
+    int     RowNumber,
+    string  OrderNumber,
+    string  ExistingLot,
+    string  ProposedLot,
+    decimal ExistingAmount,
+    decimal ProposedAmount);
+
 public record PoCsvImportResultDto(
     int ImportedCount,
+    int UpdatedCount,
     int SkippedCount,
     int ErrorCount,
     int BuildingsCreated,
     int LotsCreated,
-    List<PoCsvRowError> Errors);
+    List<PoCsvRowError>  Errors,
+    List<PoCsvConflict>  Conflicts);
+
+// ── Building/Lot CSV Import ───────────────────────────────────────────────────
+
+public record BuildingLotCsvRowError(int RowNumber, string BuildingName, string LotName, string Reason);
+
+public record BuildingLotCsvImportResultDto(
+    int BuildingsCreated,
+    int BuildingsExisting,
+    int LotsCreated,
+    int LotsExisting,
+    int AddressesSet,
+    int ErrorCount,
+    List<BuildingLotCsvRowError> Errors);
 
 // ── Project CSV Import ────────────────────────────────────────────────────────
 

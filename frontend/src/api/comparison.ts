@@ -32,6 +32,7 @@ export interface ColumnMappingResult {
   suggestedMatchColumn:        string | null
   suggestedPriceColumn:        string | null
   suggestedDescriptionColumn:  string | null
+  suggestedMfrColumn:          string | null
   suggestedQuantityColumn:     string | null
   suggestedTotalColumn:        string | null
   suggestedInvoiceNumberColumn: string | null
@@ -48,6 +49,7 @@ export interface ConfirmAdobeRequest {
   matchColumn:     string
   colPrice:        string
   colDescription:  string | null
+  colMfr:          string | null
   colQuantity:     string | null
   colTotal:        string | null
   colInvoiceNumber: string | null
@@ -68,6 +70,7 @@ export interface ConfirmSpreadsheetRequest {
   matchColumn:     string
   colPrice:        string
   colDescription:  string | null
+  colMfr:          string | null
   colQuantity:     string | null
   colTotal:        string | null
   colInvoiceNumber: string | null

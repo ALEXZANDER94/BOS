@@ -21,6 +21,7 @@ public record AdobeHeadersResult(
     string?              SuggestedMatchColumn,
     string?              SuggestedPriceColumn,
     string?              SuggestedDescriptionColumn,
+    string?              SuggestedMfrColumn,
     string?              SuggestedQuantityColumn,
     string?              SuggestedTotalColumn,
     string?              SuggestedInvoiceNumberColumn
@@ -38,6 +39,7 @@ public record ConfirmAdobeRequest(
     string  MatchColumn,
     string  ColPrice,
     string? ColDescription,
+    string? ColMFR,
     string? ColQuantity,
     string? ColTotal,
     string? ColInvoiceNumber,
@@ -58,6 +60,7 @@ public record SpreadsheetHeadersResult(
     string?              SuggestedMatchColumn,
     string?              SuggestedPriceColumn,
     string?              SuggestedDescriptionColumn,
+    string?              SuggestedMfrColumn,
     string?              SuggestedQuantityColumn,
     string?              SuggestedTotalColumn,
     string?              SuggestedInvoiceNumberColumn
@@ -74,6 +77,7 @@ public record ConfirmSpreadsheetRequest(
     string  MatchColumn,
     string  ColPrice,
     string? ColDescription,
+    string? ColMFR,
     string? ColQuantity,
     string? ColTotal,
     string? ColInvoiceNumber,

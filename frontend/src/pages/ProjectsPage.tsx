@@ -49,10 +49,13 @@ export default function ProjectsPage() {
   const [clientFilter, setClientFilter] = useState<number | undefined>(undefined)
   const [importOpen, setImportOpen]     = useState(false)
 
+  const hasFilter = !!clientFilter || !!search
+
   const { data: projects = [], isLoading } = useAllProjects(
-    search   || undefined,
-    statusFilter || undefined,
-    clientFilter
+    search        || undefined,
+    statusFilter  || undefined,
+    clientFilter,
+    { enabled: hasFilter }
   )
 
   const { data: clients = [] } = useClients()
@@ -121,7 +124,11 @@ export default function ProjectsPage() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
+      {!hasFilter ? (
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-16 text-center">
+          <p className="text-sm text-muted-foreground">Select a client from the dropdown to view their projects.</p>
+        </div>
+      ) : isLoading ? (
         <p className="text-sm text-muted-foreground py-6 text-center">Loading projects…</p>
       ) : projects.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-16 text-center">

@@ -12,6 +12,7 @@ public record ComparisonCriteriaDto(
     double?  MatchColX,
     double?  PriceColX,
     string?  ColDescription,
+    string?  ColMFR,
     string?  ColQuantity,
     string?  ColTotal,
     string?  ColInvoiceNumber,
@@ -21,8 +22,6 @@ public record ComparisonCriteriaDto(
 
 /// <summary>
 /// Payload for creating or updating comparison criteria (upsert).
-/// MFR is always extracted from MatchColumn via the Format template — there is no
-/// separate ColMFR because MFR is part of the match-key encoding by definition.
 /// </summary>
 public record UpsertComparisonCriteriaRequest(
     string  MatchColumn,
@@ -31,6 +30,7 @@ public record UpsertComparisonCriteriaRequest(
     double? MatchColX         = null,
     double? PriceColX         = null,
     string? ColDescription    = null,
+    string? ColMFR            = null,
     string? ColQuantity       = null,
     string? ColTotal          = null,
     string? ColInvoiceNumber  = null

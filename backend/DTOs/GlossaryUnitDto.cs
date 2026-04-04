@@ -47,6 +47,31 @@ public record UpdateGlossaryUnitRequest(
 );
 
 /// <summary>
+/// A single item in a bulk-price-update request: identifies the glossary entry by catalog
+/// number and supplies the new contracted price from the comparison invoice.
+/// </summary>
+public record GlossaryPriceUpdateItem(
+    string  CatalogNumber,
+    decimal NewPrice
+);
+
+/// <summary>
+/// Payload for POST /glossary/bulk-update-prices.
+/// </summary>
+public record BulkUpdateGlossaryPricesRequest(
+    List<GlossaryPriceUpdateItem> Items
+);
+
+/// <summary>
+/// Result returned after a bulk price update.
+/// UpdatedCount = rows whose price changed; SkippedCount = catalog numbers not found.
+/// </summary>
+public record BulkUpdateGlossaryPricesResult(
+    int UpdatedCount,
+    int SkippedCount
+);
+
+/// <summary>
 /// Describes a single row in the CSV that could not be imported.
 /// RowNumber is 1-based (excluding the header) so the user can locate
 /// the exact row in their spreadsheet.

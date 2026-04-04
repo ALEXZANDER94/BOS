@@ -1,19 +1,20 @@
 import axios from 'axios'
 
 export interface EmailSummary {
-  messageId:   string
-  threadId:    string
-  subject:     string
-  snippet:     string
-  fromAddress: string
-  fromName:    string
-  toAddresses: string
-  receivedAt:  string
-  isRead:      boolean
-  clientId:    number | null
-  clientName:  string | null
-  contactId:   number | null
-  contactName: string | null
+  messageId:    string
+  threadId:     string
+  subject:      string
+  snippet:      string
+  fromAddress:  string
+  fromName:     string
+  toAddresses:  string
+  receivedAt:   string
+  isRead:       boolean
+  clientId:     number | null
+  clientName:   string | null
+  contactId:    number | null
+  contactName:  string | null
+  rfcMessageId: string | null
 }
 
 export interface AttachmentMeta {
@@ -59,4 +60,11 @@ export const gmailApi = {
   getAttachmentUrl: (messageId: string, attachmentId: string, filename: string, mimeType: string) =>
     `${BASE}/message/${encodeURIComponent(messageId)}/attachment/${encodeURIComponent(attachmentId)}` +
     `?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}`,
+
+  // Resolves an RFC 2822 Message-ID (stable across all recipients) to the current user's
+  // local Gmail message ID. Returns null if the message is not in the user's mailbox.
+  findByRfcId: (rfcMessageId: string) =>
+    axios.get<{ messageId: string }>(`${BASE}/find-message`, { params: { rfcMessageId } })
+      .then(r => r.data)
+      .catch(() => null),
 }

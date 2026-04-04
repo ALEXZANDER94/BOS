@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Building2, ChevronDown, ChevronRight,
   MapPin, Pencil, Plus, RefreshCw, Trash2, X, Check,
   CheckCircle2, AlertCircle, Upload, Settings2,
-  ChevronsUpDown, Download,
+  ChevronsUpDown, Download, ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -40,9 +41,14 @@ import {
   type PurchaseOrder,
   type PurchaseOrderStatus,
   type UpsertAddressRequest,
+  type UpdateProjectRequest,
 } from '@/api/projects'
 import ImportPoModal from '@/components/projects/ImportPoModal'
 import ManagePoStatusesDialog from '@/components/projects/ManagePoStatusesDialog'
+import ProjectOptionsPanel from '@/components/projects/ProjectOptionsPanel'
+import FixturesPanel from '@/components/projects/FixturesPanel'
+import ImportBuildingsModal from '@/components/projects/ImportBuildingsModal'
+import { fixtureApi } from '@/api/fixtures'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -70,7 +76,117 @@ function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
 
-type Tab = 'overview' | 'buildings' | 'pos'
+type Tab = 'overview' | 'buildings' | 'pos' | 'fixtures' | 'options'
+
+// ── Edit Project dialog ───────────────────────────────────────────────────────
+
+const PROJECT_STATUSES = ['Active', 'On Hold', 'Completed', 'Cancelled'] as const
+
+function toDateInput(iso: string | null | undefined): string {
+  if (!iso) return ''
+  return iso.slice(0, 10) // 'YYYY-MM-DD'
+}
+
+function EditProjectDialog({
+  project,
+  onClose,
+  onSaved,
+}: {
+  project:  { id: number; clientId: number; name: string; description: string; status: string; startDate: string | null; endDate: string | null }
+  onClose:  () => void
+  onSaved:  () => void
+}) {
+  const [form, setForm] = useState<UpdateProjectRequest>({
+    name:        project.name,
+    description: project.description,
+    status:      project.status,
+    startDate:   project.startDate ?? null,
+    endDate:     project.endDate   ?? null,
+  })
+
+  const set = <K extends keyof UpdateProjectRequest>(k: K) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setForm(prev => ({ ...prev, [k]: e.target.value || null }))
+
+  const setStr = (k: 'name' | 'description' | 'status') =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setForm(prev => ({ ...prev, [k]: e.target.value }))
+
+  const updateMut = useMutation({
+    mutationFn: () => projectDetailApi.update(project.clientId, project.id, form),
+    onSuccess:  () => { onSaved(); onClose() },
+    onError:    () => toast.error('Failed to update project.'),
+  })
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Project</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1">
+            <Label>Name</Label>
+            <Input value={form.name} onChange={setStr('name')} placeholder="Project name" />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Description</Label>
+            <Textarea
+              value={form.description}
+              onChange={setStr('description')}
+              placeholder="Optional description"
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Status</Label>
+            <select
+              value={form.status}
+              onChange={setStr('status')}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {PROJECT_STATUSES.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Start Date</Label>
+              <Input
+                type="date"
+                value={toDateInput(form.startDate)}
+                onChange={set('startDate')}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>End Date</Label>
+              <Input
+                type="date"
+                value={toDateInput(form.endDate)}
+                onChange={set('endDate')}
+              />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={() => updateMut.mutate()}
+            disabled={!form.name.trim() || updateMut.isPending}
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 // ── Address form ──────────────────────────────────────────────────────────────
 
@@ -354,7 +470,7 @@ function BuildingCard({
         )}
       </div>
 
-      {/* Lots */}
+      {/* Lots + Fixtures */}
       {expanded && (
         <div className="px-3 py-2 space-y-1">
           {building.lots.length === 0 && !addingLot && (
@@ -399,6 +515,8 @@ function BuildingCard({
               <Plus className="h-3 w-3" /> Add lot
             </button>
           )}
+
+          <FixturesPanel buildingId={building.id} />
         </div>
       )}
     </div>
@@ -609,6 +727,8 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
   const [editingPo,      setEditingPo]      = useState<PurchaseOrder | null>(null)
   const [editNumber,     setEditNumber]     = useState('')
   const [editAmount,     setEditAmount]     = useState('')
+  const [sortKey,        setSortKey]        = useState<'orderNumber' | 'building' | 'lot' | 'amount' | null>(null)
+  const [sortDir,        setSortDir]        = useState<'asc' | 'desc'>('asc')
 
   const { data: qbStatus } = useQuery({
     queryKey: ['qb-status'],
@@ -678,6 +798,32 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
     setStatusFilters(prev =>
       prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
     )
+  }
+
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  const sortedPos = useMemo(() => {
+    if (!sortKey) return filteredPos
+    return [...filteredPos].sort((a, b) => {
+      let cmp = 0
+      switch (sortKey) {
+        case 'orderNumber': cmp = a.orderNumber.localeCompare(b.orderNumber); break
+        case 'building':    cmp = a.buildingName.localeCompare(b.buildingName); break
+        case 'lot':         cmp = a.lotName.localeCompare(b.lotName); break
+        case 'amount':      cmp = a.amount - b.amount; break
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [filteredPos, sortKey, sortDir])
+
+  function SortIcon({ col }: { col: typeof sortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="inline h-3 w-3 ml-1 text-muted-foreground/50" />
+    return sortDir === 'asc'
+      ? <ArrowUp   className="inline h-3 w-3 ml-1 text-foreground" />
+      : <ArrowDown className="inline h-3 w-3 ml-1 text-foreground" />
   }
 
   function exportToExcel() {
@@ -794,11 +940,19 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order #</TableHead>
+                <TableHead className="cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort('orderNumber')}>
+                  Order # <SortIcon col="orderNumber" />
+                </TableHead>
                 <TableHead>Invoice #</TableHead>
-                <TableHead>Building</TableHead>
-                <TableHead>Lot</TableHead>
-                <TableHead>Amount</TableHead>
+                <TableHead className="cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort('building')}>
+                  Building <SortIcon col="building" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort('lot')}>
+                  Lot <SortIcon col="lot" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort('amount')}>
+                  Amount <SortIcon col="amount" />
+                </TableHead>
                 <TableHead>QB Status</TableHead>
                 <TableHead>Internal Status</TableHead>
                 <TableHead>Created</TableHead>
@@ -806,7 +960,7 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPos.map(po => (
+              {sortedPos.map(po => (
                 <TableRow key={po.id}>
                   {editingPo?.id === po.id ? (
                     <>
@@ -957,6 +1111,7 @@ function PurchaseOrdersTab({ projectId }: { projectId: number }) {
 function BuildingsTab({ projectId }: { projectId: number }) {
   const qc = useQueryClient()
   const [addingBuilding, setAddingBuilding] = useState(false)
+  const [importOpen,     setImportOpen]     = useState(false)
   const [newBuildName,   setNewBuildName]   = useState('')
   const [newBuildDesc,   setNewBuildDesc]   = useState('')
 
@@ -1074,9 +1229,126 @@ function BuildingsTab({ projectId }: { projectId: number }) {
           </button>
         </div>
       ) : (
-        <Button variant="outline" size="sm" onClick={() => setAddingBuilding(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Building
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setAddingBuilding(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Building
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+            <Upload className="h-3.5 w-3.5 mr-1.5" /> Import CSV
+          </Button>
+        </div>
+      )}
+
+      {importOpen && (
+        <ImportBuildingsModal
+          projectId={projectId}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Project Fixtures tab (aggregate) ─────────────────────────────────────────
+
+function ProjectFixturesTab({ projectId }: { projectId: number }) {
+  const { data: fixtures = [], isLoading } = useQuery({
+    queryKey: ['project-fixtures', projectId],
+    queryFn:  () => fixtureApi.getByProject(projectId),
+  })
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
+  }
+
+  if (fixtures.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-12 text-center">
+        <p className="text-sm text-muted-foreground">
+          No fixtures yet. Add them from the Buildings &amp; Lots tab.
+        </p>
+      </div>
+    )
+  }
+
+  // Group by code for a summary view
+  const summary = fixtures.reduce<Record<string, { description: string; totalQty: number; locations: string[] }>>(
+    (acc, f) => {
+      if (!acc[f.code]) {
+        acc[f.code] = { description: f.description, totalQty: 0, locations: [] }
+      }
+      acc[f.code].totalQty += f.quantity
+      const loc = [f.buildingName, f.locationName].filter(Boolean).join(' › ')
+      if (loc) acc[f.code].locations.push(`${loc} ×${f.quantity}`)
+      return acc
+    },
+    {}
+  )
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        {fixtures.length} fixture{fixtures.length !== 1 ? 's' : ''} across {
+          [...new Set(fixtures.map(f => f.buildingId))].length
+        } building{[...new Set(fixtures.map(f => f.buildingId))].length !== 1 ? 's' : ''}
+      </p>
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Building</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead className="text-right">Qty</TableHead>
+              <TableHead>Note</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {fixtures.map(f => (
+              <TableRow key={f.id}>
+                <TableCell className="font-medium font-mono text-sm">{f.code}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{f.description || '—'}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{f.buildingName}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{f.locationName ?? '—'}</TableCell>
+                <TableCell className="text-sm text-right">{f.quantity}</TableCell>
+                <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{f.note || '—'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Summary by code */}
+      {Object.keys(summary).length > 1 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">Summary by Code</h3>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Total Qty</TableHead>
+                  <TableHead>Used In</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.entries(summary).sort(([a], [b]) => a.localeCompare(b)).map(([code, s]) => (
+                  <TableRow key={code}>
+                    <TableCell className="font-medium font-mono text-sm">{code}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{s.description || '—'}</TableCell>
+                    <TableCell className="text-sm text-right font-medium">{s.totalQty}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {s.locations.length > 0 ? s.locations.join(', ') : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -1087,7 +1359,9 @@ function BuildingsTab({ projectId }: { projectId: number }) {
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
   const projectId = Number(id)
-  const [tab, setTab] = useState<Tab>('overview')
+  const qc = useQueryClient()
+  const [tab,      setTab]      = useState<Tab>('overview')
+  const [editOpen, setEditOpen] = useState(false)
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project-detail', projectId],
@@ -1134,6 +1408,14 @@ export default function ProjectDetailPage() {
           >
             {project.status}
           </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditOpen(true)}
+            className="ml-auto"
+          >
+            <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+          </Button>
         </div>
         <p className="text-sm text-muted-foreground">
           <Link to={`/clients/${project.clientId}`} className="hover:underline text-foreground">
@@ -1148,11 +1430,13 @@ export default function ProjectDetailPage() {
       {/* Tabs */}
       <div className="border-b border-border">
         <nav className="-mb-px flex gap-6">
-          {(['overview', 'buildings', 'pos'] as Tab[]).map(t => {
+          {(['overview', 'buildings', 'pos', 'fixtures', 'options'] as Tab[]).map(t => {
             const labels: Record<Tab, string> = {
               overview:  'Overview',
               buildings: 'Buildings & Lots',
               pos:       'Purchase Orders',
+              fixtures:  'Fixtures',
+              options:   'Options',
             }
             return (
               <button
@@ -1223,6 +1507,16 @@ export default function ProjectDetailPage() {
 
       {tab === 'buildings' && <BuildingsTab projectId={projectId} />}
       {tab === 'pos'       && <PurchaseOrdersTab projectId={projectId} />}
+      {tab === 'fixtures'  && <ProjectFixturesTab projectId={projectId} />}
+      {tab === 'options'   && <ProjectOptionsPanel projectId={projectId} />}
+
+      {editOpen && (
+        <EditProjectDialog
+          project={project}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => qc.invalidateQueries({ queryKey: ['project-detail', projectId] })}
+        />
+      )}
     </div>
   )
 }

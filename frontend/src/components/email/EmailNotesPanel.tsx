@@ -145,12 +145,17 @@ function NoteCard({
 
 interface EmailNotesPanelProps {
   messageId:    string
+  noteKey?:     string   // RFC Message-ID used as the stable cross-user note key; falls back to messageId
   aliasFilter?: string   // when set, only members of this alias group are taggable
 }
 
-export function EmailNotesPanel({ messageId, aliasFilter }: EmailNotesPanelProps) {
+export function EmailNotesPanel({ messageId, noteKey, aliasFilter }: EmailNotesPanelProps) {
   const [newNoteText, setNewNoteText] = useState('')
   const qc = useQueryClient()
+
+  // Use the RFC Message-ID as the note key when available so all recipients of the same
+  // group email share a single set of notes, regardless of their per-mailbox Gmail message ID.
+  const key = noteKey ?? messageId
 
   const { data: currentUser } = useQuery<{ name: string; email: string }>({
     queryKey: ['me'],
@@ -160,22 +165,22 @@ export function EmailNotesPanel({ messageId, aliasFilter }: EmailNotesPanelProps
   const { data: workspaceUsers = [] } = useWorkspaceUsers(aliasFilter)
 
   const { data: notes = [], isLoading } = useQuery({
-    queryKey: ['email-notes', messageId],
-    queryFn:  () => emailNotesApi.getNotes(messageId),
-    enabled:  !!messageId,
+    queryKey: ['email-notes', key],
+    queryFn:  () => emailNotesApi.getNotes(key),
+    enabled:  !!key,
   })
 
   const createMutation = useMutation({
-    mutationFn: () => emailNotesApi.createNote(messageId, newNoteText),
+    mutationFn: () => emailNotesApi.createNote(key, newNoteText),
     onSuccess: () => {
       setNewNoteText('')
-      qc.invalidateQueries({ queryKey: ['email-notes', messageId] })
+      qc.invalidateQueries({ queryKey: ['email-notes', key] })
       qc.invalidateQueries({ queryKey: ['email-note-counts'] })
     },
   })
 
   function invalidateAfterChange() {
-    qc.invalidateQueries({ queryKey: ['email-notes', messageId] })
+    qc.invalidateQueries({ queryKey: ['email-notes', key] })
     qc.invalidateQueries({ queryKey: ['email-note-counts'] })
   }
 

@@ -226,9 +226,11 @@ function ToField({
 
 function EmailDetailPanel({
   messageId,
+  noteKey,
   clients,
 }: {
   messageId: string
+  noteKey?:  string
   clients:   Client[]
 }) {
   const { data: detail, isLoading } = useEmailDetail(messageId)
@@ -288,7 +290,7 @@ function EmailDetailPanel({
             </p>
           )}
           <div className="pt-0.5">
-            <EmailAssignmentPanel messageId={messageId} />
+            <EmailAssignmentPanel messageId={messageId} noteKey={noteKey} />
           </div>
           {detail.attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1">
@@ -342,12 +344,22 @@ export default function EmailsPage() {
   const [search, setSearch]                       = useState('')
   const [isEditingAliases, setIsEditingAliases]   = useState(false)
 
-  // Deep-link from notification: /emails?select=messageId
+  // Deep-link from notification: /emails?select=<id>
+  // The id may be a Gmail-internal message ID (hex) or an RFC 2822 Message-ID (contains '@').
+  // RFC Message-IDs are used as the stable cross-user note key. We resolve them to the current
+  // user's local Gmail ID before selecting so the email body loads from their own mailbox.
   useEffect(() => {
     const sel = searchParams.get('select')
-    if (sel) {
+    if (!sel) return
+    setSearchParams({}, { replace: true })
+
+    if (sel.includes('@')) {
+      // Looks like an RFC Message-ID — resolve to this user's Gmail ID first
+      gmailApi.findByRfcId(sel).then(res => {
+        if (res?.messageId) setSelectedMessageId(res.messageId)
+      })
+    } else {
       setSelectedMessageId(sel)
-      setSearchParams({}, { replace: true })
     }
   // Run once on mount only
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -391,28 +403,51 @@ export default function EmailsPage() {
 
   const isLoading = filter.type === 'category' ? categoryLoading : gmailLoading
 
-  // Batch-load assignments to decorate each row
-  const messageIds = useMemo(() => allEmails.map(e => e.messageId), [allEmails])
-  const { data: batchAssignments = [] } = useEmailAssignmentsBatch(messageIds)
+  // Build a list of stable note keys (RFC Message-IDs preferred, Gmail ID as fallback).
+  // Notes are stored under RFC Message-IDs so all group members share the same note set.
+  const noteKeys = useMemo(
+    () => allEmails.map(e => e.rfcMessageId ?? e.messageId),
+    [allEmails]
+  )
+  // Map each email's note key back to its Gmail message ID so the row can display the count.
+  const rfcToGmailId = useMemo(
+    () => Object.fromEntries(allEmails.map(e => [e.rfcMessageId ?? e.messageId, e.messageId])),
+    [allEmails]
+  )
 
-  // Pre-build a messageId → assignment map for O(1) lookup
+  // Batch-load assignments using stable note keys (RFC Message-IDs preferred).
+  // Assignments are stored under RFC IDs so all group members share the same assignment.
+  const { data: batchAssignments = [] } = useEmailAssignmentsBatch(noteKeys)
+
+  // Pre-build a Gmail messageId → assignment map for O(1) lookup.
+  // batchAssignments use RFC IDs as messageId; re-key to Gmail IDs via rfcToGmailId.
   const assignmentMap = useMemo(() =>
-    Object.fromEntries(batchAssignments.map(a => [a.messageId, a])),
-    [batchAssignments])
-
-  // Fetch note counts for visible emails
-  const noteCountIds = messageIds.join(',')
-  const { data: noteCounts = {} } = useQuery<EmailNoteCounts>({
-    queryKey: ['email-note-counts', noteCountIds],
-    queryFn:  () => emailNotesApi.getNoteCounts(messageIds),
-    enabled:  messageIds.length > 0,
+    Object.fromEntries(
+      batchAssignments.map(a => [rfcToGmailId[a.messageId] ?? a.messageId, a])
+    ),
+    [batchAssignments, rfcToGmailId])
+  const noteCountKeys = noteKeys.join(',')
+  const { data: noteCountsByKey = {} } = useQuery<EmailNoteCounts>({
+    queryKey: ['email-note-counts', noteCountKeys],
+    queryFn:  () => emailNotesApi.getNoteCounts(noteKeys),
+    enabled:  noteKeys.length > 0,
   })
+  // Re-key by Gmail message ID so EmailRow lookups work unchanged
+  const noteCounts = useMemo(
+    () => Object.fromEntries(
+      Object.entries(noteCountsByKey).map(([k, v]) => [rfcToGmailId[k] ?? k, v])
+    ),
+    [noteCountsByKey, rfcToGmailId]
+  )
 
-  // Category assignments already returned by useCategoryEmails
+  // Category assignments already returned by useCategoryEmails.
+  // Stored messageId values may be RFC IDs; re-key to Gmail IDs for row lookups.
   const categoryAssignmentMap = useMemo(() => {
     if (filter.type !== 'category' || !categoryData) return {}
-    return Object.fromEntries(categoryData.assignments.map(a => [a.messageId, a]))
-  }, [filter, categoryData])
+    return Object.fromEntries(
+      categoryData.assignments.map(a => [rfcToGmailId[a.messageId] ?? a.messageId, a])
+    )
+  }, [filter, categoryData, rfcToGmailId])
 
   const effectiveAssignmentMap = filter.type === 'category'
     ? categoryAssignmentMap
@@ -720,10 +755,15 @@ export default function EmailsPage() {
         {selectedMessageId ? (
           <>
             <div className="flex-1 flex flex-col overflow-hidden">
-              <EmailDetailPanel messageId={selectedMessageId} clients={clients} />
+              <EmailDetailPanel
+                messageId={selectedMessageId}
+                noteKey={allEmails.find(e => e.messageId === selectedMessageId)?.rfcMessageId ?? undefined}
+                clients={clients}
+              />
             </div>
             <EmailNotesPanel
               messageId={selectedMessageId}
+              noteKey={allEmails.find(e => e.messageId === selectedMessageId)?.rfcMessageId ?? undefined}
               aliasFilter={filter.type === 'alias' ? filter.address : undefined}
             />
           </>

@@ -20,6 +20,18 @@ public interface IGmailService
     Task<byte[]>                  GetAttachmentDataAsync(string userEmail, string messageId, string attachmentId);
     Task<IReadOnlyList<string>>   GetForwardingAddressesAsync(string userEmail);
     Task<IReadOnlyList<EmailSummaryDto>> GetEmailsByIdsAsync(string userEmail, IEnumerable<string> messageIds);
+    /// <summary>
+    /// Searches the user's Gmail for a message matching the given RFC 2822 Message-ID header value
+    /// and returns that user's local Gmail message ID, or null if not found.
+    /// </summary>
+    Task<string?> FindMessageByRfcIdAsync(string userEmail, string rfcMessageId);
+
+    /// <summary>
+    /// Fetches only the RFC 2822 Message-ID header for a specific Gmail message.
+    /// Used to resolve legacy per-user Gmail IDs to the stable cross-user RFC ID.
+    /// Returns null if the message is not found or has no Message-ID header.
+    /// </summary>
+    Task<string?> GetRfcMessageIdAsync(string userEmail, string gmailMessageId);
 }
 
 public class GmailService : IGmailService
@@ -79,7 +91,8 @@ public class GmailService : IGmailService
                 meta.Subject,   meta.Snippet,
                 meta.FromAddress, meta.FromName, meta.To,
                 meta.ReceivedAt, meta.IsRead,
-                clientId, clientName, contactId, contactName));
+                clientId, clientName, contactId, contactName,
+                meta.RfcMessageId));
         }
 
         return new EmailListResponse(
@@ -112,6 +125,9 @@ public class GmailService : IGmailService
         var (clientId, clientName, contactId, contactName)  = await MatchToClientAsync(from, to, cc);
         var attachments                                      = ExtractAttachments(msg.Payload);
 
+        var rawRfcId     = headers.GetValueOrDefault("Message-ID");
+        var rfcMessageId = rawRfcId != null ? rawRfcId.Trim().Trim('<', '>') : null;
+
         return new EmailDetailDto(
             messageId, msg.ThreadId ?? "",
             subject,
@@ -119,7 +135,7 @@ public class GmailService : IGmailService
             ParseDate(dateStr), isRead,
             bodyText, bodyHtml,
             clientId, clientName, contactId, contactName,
-            attachments);
+            attachments, rfcMessageId);
     }
 
     public async Task<byte[]> GetAttachmentDataAsync(string userEmail, string messageId, string attachmentId)
@@ -135,6 +151,35 @@ public class GmailService : IGmailService
         var padding = (4 - base64.Length % 4) % 4;
         base64 += new string('=', padding);
         return Convert.FromBase64String(base64);
+    }
+
+    public async Task<string?> FindMessageByRfcIdAsync(string userEmail, string rfcMessageId)
+    {
+        var accessToken = await GetValidAccessTokenAsync(userEmail);
+        var service     = CreateApiClient(accessToken);
+
+        var cleanId = rfcMessageId.Trim().Trim('<', '>');
+        var listReq = service.Users.Messages.List("me");
+        listReq.Q          = $"rfc822msgid:{cleanId}";
+        listReq.MaxResults  = 1;
+
+        var resp = await listReq.ExecuteAsync();
+        return resp.Messages?.FirstOrDefault()?.Id;
+    }
+
+    public async Task<string?> GetRfcMessageIdAsync(string userEmail, string gmailMessageId)
+    {
+        try
+        {
+            var accessToken = await GetValidAccessTokenAsync(userEmail);
+            var service     = CreateApiClient(accessToken);
+            var meta        = await FetchMetadataAsync(service, gmailMessageId);
+            return meta?.RfcMessageId;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<IReadOnlyList<string>> GetForwardingAddressesAsync(string userEmail)
@@ -258,7 +303,8 @@ public class GmailService : IGmailService
                 meta.Subject,   meta.Snippet,
                 meta.FromAddress, meta.FromName, meta.To,
                 meta.ReceivedAt, meta.IsRead,
-                clientId, clientName, contactId, contactName));
+                clientId, clientName, contactId, contactName,
+                meta.RfcMessageId));
         }
 
         return summaries;
@@ -330,7 +376,8 @@ public class GmailService : IGmailService
         string   FromAddress,
         string   FromName,
         DateTime ReceivedAt,
-        bool     IsRead);
+        bool     IsRead,
+        string?  RfcMessageId);
 
     private static async Task<MessageMeta?> FetchMetadataAsync(
         GmailApiClient service, string messageId)
@@ -340,7 +387,7 @@ public class GmailService : IGmailService
             var req    = service.Users.Messages.Get("me", messageId);
             req.Format = MessagesResource.GetRequest.FormatEnum.Metadata;
             req.MetadataHeaders = new Repeatable<string>(
-                ["From", "To", "Cc", "Subject", "Date"]);
+                ["From", "To", "Cc", "Subject", "Date", "Message-ID"]);
 
             var msg = await req.ExecuteAsync();
 
@@ -356,12 +403,19 @@ public class GmailService : IGmailService
 
             var (fromAddress, fromName) = ParseEmailAddress(from);
 
+            // Strip angle brackets from the RFC 2822 Message-ID header (e.g. <id@host> → id@host)
+            var rawRfcId = headers.GetValueOrDefault("Message-ID");
+            var rfcMessageId = rawRfcId != null
+                ? rawRfcId.Trim().Trim('<', '>')
+                : null;
+
             return new MessageMeta(
                 messageId, msg.ThreadId ?? "",
                 subject, msg.Snippet ?? "",
                 from, to, cc,
                 fromAddress, fromName,
-                ParseDate(dateStr), isRead);
+                ParseDate(dateStr), isRead,
+                rfcMessageId);
         }
         catch
         {

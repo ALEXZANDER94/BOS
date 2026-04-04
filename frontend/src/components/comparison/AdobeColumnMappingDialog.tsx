@@ -30,6 +30,7 @@ interface ColumnMappingDialogProps {
     matchColumn:      string
     colPrice:         string
     colDescription:   string | null
+    colMfr:           string | null
     colQuantity:      string | null
     colTotal:         string | null
     colInvoiceNumber: string | null
@@ -53,6 +54,7 @@ export function AdobeColumnMappingDialog({
   const [matchColumn,      setMatchColumn]        = useState<string>(result.suggestedMatchColumn        ?? '')
   const [colPrice,         setColPrice]           = useState<string>(result.suggestedPriceColumn        ?? '')
   const [colDescription,   setColDescription]     = useState<string>(result.suggestedDescriptionColumn  ?? NONE)
+  const [colMfr,           setColMfr]             = useState<string>(result.suggestedMfrColumn           ?? NONE)
   const [colQuantity,      setColQuantity]        = useState<string>(result.suggestedQuantityColumn     ?? NONE)
   const [colTotal,         setColTotal]           = useState<string>(result.suggestedTotalColumn        ?? NONE)
   const [colInvoiceNumber, setColInvoiceNumber]   = useState<string>(result.suggestedInvoiceNumberColumn ?? NONE)
@@ -69,6 +71,7 @@ export function AdobeColumnMappingDialog({
     if (!availableHeaders.includes(matchColumn))                                   setMatchColumn('')
     if (!availableHeaders.includes(colPrice))                                      setColPrice('')
     if (colDescription   !== NONE && !availableHeaders.includes(colDescription))   setColDescription(NONE)
+    if (colMfr           !== NONE && !availableHeaders.includes(colMfr))           setColMfr(NONE)
     if (colQuantity      !== NONE && !availableHeaders.includes(colQuantity))      setColQuantity(NONE)
     if (colTotal         !== NONE && !availableHeaders.includes(colTotal))         setColTotal(NONE)
     if (colInvoiceNumber !== NONE && !availableHeaders.includes(colInvoiceNumber)) setColInvoiceNumber(NONE)
@@ -84,6 +87,7 @@ export function AdobeColumnMappingDialog({
       matchColumn,
       colPrice,
       colDescription:   colDescription   === NONE ? null : colDescription,
+      colMfr:           colMfr           === NONE ? null : colMfr,
       colQuantity:      colQuantity      === NONE ? null : colQuantity,
       colTotal:         colTotal         === NONE ? null : colTotal,
       colInvoiceNumber: colInvoiceNumber === NONE ? null : colInvoiceNumber,
@@ -201,7 +205,17 @@ export function AdobeColumnMappingDialog({
             <OptionalColSelect id="desc-col" value={colDescription} onChange={setColDescription} />
             <p className="text-xs text-muted-foreground">
               Optional — used to populate the description for new items not in the master glossary.
-              MFR is always parsed from the Match Key column using the supplier&apos;s Format template.
+            </p>
+          </div>
+
+          {/* MFR column — optional */}
+          <div className="grid gap-1.5">
+            <Label htmlFor="mfr-col">Manufacturer (MFR) Column</Label>
+            <OptionalColSelect id="mfr-col" value={colMfr} onChange={setColMfr} />
+            <p className="text-xs text-muted-foreground">
+              Optional — when set, the manufacturer is read directly from this column instead of
+              being parsed from the Match Key column via the Format template.
+              Useful when the supplier's file has a dedicated MFR column.
             </p>
           </div>
 

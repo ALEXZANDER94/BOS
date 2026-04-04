@@ -136,6 +136,36 @@ public class GmailController : ControllerBase
         }
     }
 
+    // GET /api/gmail/find-message?rfcMessageId=...
+    // Searches the current user's Gmail for a message matching the given RFC 2822 Message-ID header
+    // and returns the user's local Gmail message ID. Used so group members can navigate to their own
+    // copy of an email when following a mention notification whose relatedMessageId is an RFC ID.
+    [HttpGet("find-message")]
+    public async Task<IActionResult> FindByRfcMessageId([FromQuery] string rfcMessageId)
+    {
+        var email = CurrentUserEmail;
+        if (string.IsNullOrEmpty(email)) return Unauthorized();
+
+        if (!await _gmail.HasValidTokenAsync(email))
+            return BadRequest(new { error = "Gmail not connected." });
+
+        if (string.IsNullOrWhiteSpace(rfcMessageId))
+            return BadRequest(new { error = "rfcMessageId is required." });
+
+        try
+        {
+            var localId = await _gmail.FindMessageByRfcIdAsync(email, rfcMessageId);
+            if (localId == null)
+                return NotFound(new { error = "Message not found in your mailbox." });
+
+            return Ok(new { messageId = localId });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     // GET /api/gmail/message/{messageId}/attachment/{attachmentId}?filename=...&mimeType=...
     // Fetches and streams a Gmail attachment. Inline for images/PDFs, download otherwise.
     [HttpGet("message/{messageId}/attachment/{attachmentId}")]

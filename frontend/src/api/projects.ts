@@ -108,20 +108,42 @@ export interface PoCsvRowError {
   reason:      string
 }
 
+export interface PoCsvConflict {
+  rowNumber:      number
+  orderNumber:    string
+  existingLot:    string
+  proposedLot:    string
+  existingAmount: number
+  proposedAmount: number
+}
+
 export interface PoCsvImportResult {
   importedCount:    number
+  updatedCount:     number
   skippedCount:     number
   errorCount:       number
   buildingsCreated: number
   lotsCreated:      number
   errors:           PoCsvRowError[]
+  conflicts:        PoCsvConflict[]
 }
 
 // ── API objects ───────────────────────────────────────────────────────────────
 
+export interface UpdateProjectRequest {
+  name:        string
+  description: string
+  status:      string
+  startDate:   string | null
+  endDate:     string | null
+}
+
 export const projectDetailApi = {
   getById: (id: number) =>
     axios.get<ProjectDetail>(`/api/project/${id}`).then(r => r.data),
+
+  update: (clientId: number, id: number, data: UpdateProjectRequest) =>
+    axios.put<ProjectDetail>(`/api/client/${clientId}/project/${id}`, data).then(r => r.data),
 }
 
 export const buildingApi = {
@@ -174,9 +196,11 @@ export const purchaseOrderApi = {
   syncAll: (projectId: number) =>
     axios.post<PurchaseOrder[]>(`/api/project/${projectId}/purchase-order/sync-all`).then(r => r.data),
 
-  importFromCsv: (projectId: number, file: File) => {
+  importFromCsv: (projectId: number, file: File, overrideOrderNumbers?: string[]) => {
     const fd = new FormData()
     fd.append('file', file)
+    if (overrideOrderNumbers && overrideOrderNumbers.length > 0)
+      fd.append('overrideOrderNumbers', overrideOrderNumbers.join(','))
     return axios.post<PoCsvImportResult>(
       `/api/project/${projectId}/purchase-order/import`,
       fd,
@@ -216,6 +240,35 @@ export interface ProjectCsvImportResult {
   skippedCount:  number
   errorCount:    number
   errors:        ProjectCsvRowError[]
+}
+
+export interface BuildingLotCsvRowError {
+  rowNumber:    number
+  buildingName: string
+  lotName:      string
+  reason:       string
+}
+
+export interface BuildingLotCsvImportResult {
+  buildingsCreated:  number
+  buildingsExisting: number
+  lotsCreated:       number
+  lotsExisting:      number
+  addressesSet:      number
+  errorCount:        number
+  errors:            BuildingLotCsvRowError[]
+}
+
+export const buildingLotImportApi = {
+  importFromCsv: (projectId: number, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return axios.post<BuildingLotCsvImportResult>(
+      `/api/project/${projectId}/building/import`,
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    ).then(r => r.data)
+  },
 }
 
 export const allProjectsApi = {

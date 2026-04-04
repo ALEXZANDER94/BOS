@@ -75,6 +75,7 @@ export default function ComparisonPage() {
       matchColumn:      string
       colPrice:         string
       colDescription:   string | null
+      colMfr:           string | null
       colQuantity:      string | null
       colTotal:         string | null
       colInvoiceNumber: string | null
@@ -87,6 +88,7 @@ export default function ComparisonPage() {
         matchColumn:      params.matchColumn,
         colPrice:         params.colPrice,
         colDescription:   params.colDescription,
+        colMfr:           params.colMfr,
         colQuantity:      params.colQuantity,
         colTotal:         params.colTotal,
         colInvoiceNumber: params.colInvoiceNumber,
@@ -128,6 +130,7 @@ export default function ComparisonPage() {
       matchColumn:      string
       colPrice:         string
       colDescription:   string | null
+      colMfr:           string | null
       colQuantity:      string | null
       colTotal:         string | null
       colInvoiceNumber: string | null
@@ -140,6 +143,7 @@ export default function ComparisonPage() {
         matchColumn:      params.matchColumn,
         colPrice:         params.colPrice,
         colDescription:   params.colDescription,
+        colMfr:           params.colMfr,
         colQuantity:      params.colQuantity,
         colTotal:         params.colTotal,
         colInvoiceNumber: params.colInvoiceNumber,

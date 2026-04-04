@@ -19,12 +19,16 @@ public class AppDbContext : DbContext
     public DbSet<Project>        Projects        => Set<Project>();
     public DbSet<ProjectContact> ProjectContacts => Set<ProjectContact>();
     public DbSet<ActivityLog>    ActivityLogs    => Set<ActivityLog>();
+    public DbSet<ClientAddon>            ClientAddons            => Set<ClientAddon>();
+    public DbSet<ProjectAddonAssignment> ProjectAddonAssignments => Set<ProjectAddonAssignment>();
 
     // Project hierarchy
-    public DbSet<Building>      Buildings      => Set<Building>();
-    public DbSet<Lot>           Lots           => Set<Lot>();
-    public DbSet<Address>       Addresses      => Set<Address>();
-    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+    public DbSet<Building>         Buildings         => Set<Building>();
+    public DbSet<Lot>              Lots              => Set<Lot>();
+    public DbSet<Address>          Addresses         => Set<Address>();
+    public DbSet<PurchaseOrder>    PurchaseOrders    => Set<PurchaseOrder>();
+    public DbSet<Fixture>          Fixtures          => Set<Fixture>();
+    public DbSet<FixtureLocation>  FixtureLocations  => Set<FixtureLocation>();
 
     // QuickBooks integration
     public DbSet<QuickBooksToken>      QuickBooksTokens      => Set<QuickBooksToken>();
@@ -318,6 +322,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(e => e.ProjectId);
+            entity.HasIndex(e => new { e.ProjectId, e.OrderNumber }).IsUnique();
 
             entity.HasOne(e => e.Project)
                   .WithMany()
@@ -346,6 +351,42 @@ public class AppDbContext : DbContext
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
         });
 
+        // ── FixtureLocation ───────────────────────────────────────────────────────
+        modelBuilder.Entity<FixtureLocation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.HasIndex(e => e.Name).IsUnique();
+        });
+
+        // ── Fixture ───────────────────────────────────────────────────────────────
+        modelBuilder.Entity<Fixture>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.BuildingId).HasColumnName("building_id");
+            entity.Property(e => e.LocationId).HasColumnName("location_id").IsRequired(false);
+            entity.Property(e => e.Code).HasColumnName("code").IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.Quantity).HasColumnName("quantity").HasDefaultValue(1);
+            entity.Property(e => e.Note).HasColumnName("note");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.HasIndex(e => e.BuildingId);
+
+            entity.HasOne(e => e.Building)
+                  .WithMany(b => b.Fixtures)
+                  .HasForeignKey(e => e.BuildingId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Location)
+                  .WithMany(l => l.Fixtures)
+                  .HasForeignKey(e => e.LocationId)
+                  .OnDelete(DeleteBehavior.SetNull)
+                  .IsRequired(false);
+        });
+
         // ── QuickBooksToken ───────────────────────────────────────────────────────
         modelBuilder.Entity<QuickBooksToken>(entity =>
         {
@@ -357,6 +398,46 @@ public class AppDbContext : DbContext
             entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        // ── ClientAddon ───────────────────────────────────────────────────────────
+        modelBuilder.Entity<ClientAddon>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ClientId).HasColumnName("client_id");
+            entity.Property(e => e.Code).HasColumnName("code").IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.Notes).HasColumnName("notes");
+            // Code must be unique per client
+            entity.HasIndex(e => new { e.ClientId, e.Code }).IsUnique();
+
+            entity.HasOne(e => e.Client)
+                  .WithMany()
+                  .HasForeignKey(e => e.ClientId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ProjectAddonAssignment ────────────────────────────────────────────────
+        modelBuilder.Entity<ProjectAddonAssignment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AddonId).HasColumnName("addon_id");
+            entity.Property(e => e.ProjectId).HasColumnName("project_id");
+            entity.Property(e => e.Price).HasColumnName("price").HasColumnType("decimal(18,2)");
+            // One assignment per addon per project
+            entity.HasIndex(e => new { e.AddonId, e.ProjectId }).IsUnique();
+
+            entity.HasOne(e => e.Addon)
+                  .WithMany(a => a.Assignments)
+                  .HasForeignKey(e => e.AddonId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Project)
+                  .WithMany()
+                  .HasForeignKey(e => e.ProjectId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── GlossaryUnit ────────────────────────────────────────────────────────

@@ -52,10 +52,17 @@ public class ComparisonCriteria
     /// extracts from MatchColumn. Useful for suppliers like CED whose PDFs keep Description
     /// in a separate column while MFR+CatalogNumber are packed into the match-key cell.
     /// e.g. "Description", "DESCRIPTION", "Product Description"
-    /// MFR is always extracted from MatchColumn via the Format template — there is no
-    /// separate ColMFR because MFR is by definition part of the match key encoding.
     /// </summary>
     public string? ColDescription { get; set; }
+
+    /// <summary>
+    /// Optional column header for the manufacturer (MFR) code/name.
+    /// When set, MFR is read directly from this column and takes precedence over
+    /// any MFR extracted from MatchColumn via the Format template.
+    /// e.g. "MFR", "Manufacturer", "Brand"
+    /// Leave null to fall back to the Format template parse (existing behaviour).
+    /// </summary>
+    public string? ColMFR { get; set; }
 
     /// <summary>
     /// Optional column header for the quantity (number of units the listed price covers).

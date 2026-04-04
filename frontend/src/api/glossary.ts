@@ -33,6 +33,16 @@ export interface UpdateGlossaryUnitRequest extends CreateGlossaryUnitRequest {
   notes?: string | null
 }
 
+export interface GlossaryPriceUpdateItem {
+  catalogNumber: string
+  newPrice:      number
+}
+
+export interface BulkUpdateGlossaryPricesResult {
+  updatedCount: number
+  skippedCount: number
+}
+
 // Mirrors CsvRowError C# record
 export interface CsvRowError {
   rowNumber: number
@@ -71,6 +81,11 @@ export const glossaryApi = {
 
   delete: (supplierId: number, id: number) =>
     axios.delete(`${base(supplierId)}/${id}`),
+
+  bulkUpdatePrices: (supplierId: number, items: GlossaryPriceUpdateItem[]) =>
+    axios
+      .post<BulkUpdateGlossaryPricesResult>(`${base(supplierId)}/bulk-update-prices`, { items })
+      .then(r => r.data),
 
   importFromCsv: (supplierId: number, file: File, overwrite: boolean) => {
     const form = new FormData()

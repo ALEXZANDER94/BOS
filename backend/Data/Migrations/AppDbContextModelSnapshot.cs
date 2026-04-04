@@ -210,6 +210,40 @@ namespace BOS.Backend.Data.Migrations
                     b.ToTable("Clients");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.ClientAddon", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<int>("ClientId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("client_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("code");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("notes");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("ClientAddons");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.ComparisonCriteria", b =>
                 {
                     b.Property<int>("Id")
@@ -221,6 +255,9 @@ namespace BOS.Backend.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ColInvoiceNumber")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ColMFR")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ColPrice")
@@ -455,6 +492,79 @@ namespace BOS.Backend.Data.Migrations
                     b.ToTable("EmailNotes");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.Fixture", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("building_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<int?>("LocationId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("location_id");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<int>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1)
+                        .HasColumnName("quantity");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingId");
+
+                    b.HasIndex("LocationId");
+
+                    b.ToTable("Fixtures");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.FixtureLocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("FixtureLocations");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.GlossaryUnit", b =>
                 {
                     b.Property<int>("Id")
@@ -663,6 +773,35 @@ namespace BOS.Backend.Data.Migrations
                     b.ToTable("Projects");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.ProjectAddonAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AddonId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("addon_id");
+
+                    b.Property<decimal?>("Price")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("price");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("project_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("AddonId", "ProjectId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectAddonAssignments");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.ProjectContact", b =>
                 {
                     b.Property<int>("ProjectId")
@@ -732,6 +871,9 @@ namespace BOS.Backend.Data.Migrations
                     b.HasIndex("LotId");
 
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("ProjectId", "OrderNumber")
+                        .IsUnique();
 
                     b.ToTable("PurchaseOrders");
                 });
@@ -932,6 +1074,17 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.ClientAddon", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.ComparisonCriteria", b =>
                 {
                     b.HasOne("BOS.Backend.Models.Supplier", "Supplier")
@@ -983,6 +1136,24 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.Fixture", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Building", "Building")
+                        .WithMany("Fixtures")
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BOS.Backend.Models.FixtureLocation", "Location")
+                        .WithMany("Fixtures")
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Building");
+
+                    b.Navigation("Location");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.GlossaryUnit", b =>
                 {
                     b.HasOne("BOS.Backend.Models.GlossaryUnitStatus", "Status")
@@ -1021,6 +1192,25 @@ namespace BOS.Backend.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Client");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProjectAddonAssignment", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.ClientAddon", "Addon")
+                        .WithMany("Assignments")
+                        .HasForeignKey("AddonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BOS.Backend.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Addon");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("BOS.Backend.Models.ProjectContact", b =>
@@ -1070,6 +1260,8 @@ namespace BOS.Backend.Data.Migrations
 
             modelBuilder.Entity("BOS.Backend.Models.Building", b =>
                 {
+                    b.Navigation("Fixtures");
+
                     b.Navigation("Lots");
                 });
 
@@ -1082,6 +1274,11 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Projects");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.ClientAddon", b =>
+                {
+                    b.Navigation("Assignments");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.Contact", b =>
                 {
                     b.Navigation("ProjectContacts");
@@ -1092,6 +1289,11 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Assignments");
 
                     b.Navigation("Statuses");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.FixtureLocation", b =>
+                {
+                    b.Navigation("Fixtures");
                 });
 
             modelBuilder.Entity("BOS.Backend.Models.Lot", b =>

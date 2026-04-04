@@ -187,7 +187,7 @@ public class PurchaseOrdersController : ControllerBase
 
     // POST /api/project/1/purchase-order/import
     [HttpPost("import")]
-    public async Task<IActionResult> Import(int projectId, IFormFile? file)
+    public async Task<IActionResult> Import(int projectId, IFormFile? file, [FromForm] string? overrideOrderNumbers)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "No file provided." });
@@ -201,7 +201,15 @@ public class PurchaseOrdersController : ControllerBase
         var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId);
         if (!projectExists) return NotFound(new { message = "Project not found." });
 
-        var result = await _projects.ImportPurchaseOrdersAsync(projectId, file);
+        IReadOnlySet<string>? toUpdate = null;
+        if (!string.IsNullOrWhiteSpace(overrideOrderNumbers))
+        {
+            toUpdate = overrideOrderNumbers
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var result = await _projects.ImportPurchaseOrdersAsync(projectId, file, toUpdate);
         return Ok(result);
     }
 

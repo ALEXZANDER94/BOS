@@ -57,4 +57,13 @@ public class QuickBooksController : ControllerBase
         await _qb.DisconnectAsync();
         return NoContent();
     }
+
+    // GET /api/quickbooks/customers — used by the manual QB customer picker
+    // on the Client edit modal. Returns an empty list when not connected.
+    [HttpGet("customers")]
+    public async Task<IActionResult> ListCustomers()
+    {
+        var customers = await _qb.ListCustomersAsync();
+        return Ok(customers);
+    }
 }

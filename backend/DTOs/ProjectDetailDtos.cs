@@ -26,22 +26,26 @@ public record LotDto(
     int         BuildingId,
     string      Name,
     string      Description,
+    int?        PlanId,
+    string?     PlanName,
     AddressDto? Address);
 
-public record CreateLotRequest(string Name, string Description);
-public record UpdateLotRequest(string Name, string Description);
+public record CreateLotRequest(string Name, string Description, int? PlanId);
+public record UpdateLotRequest(string Name, string Description, int? PlanId);
 
 // ── Building ──────────────────────────────────────────────────────────────────
 
 public record BuildingDto(
-    int          Id,
-    int          ProjectId,
-    string       Name,
-    string       Description,
-    List<LotDto> Lots);
+    int           Id,
+    int           ProjectId,
+    string        Name,
+    string        Description,
+    List<LotDto>  Lots,
+    List<PlanDto> Plans);
 
 public record CreateBuildingRequest(string Name, string Description);
 public record UpdateBuildingRequest(string Name, string Description);
+public record ReorderRequest(List<int> OrderedIds);
 
 // ── PurchaseOrder ─────────────────────────────────────────────────────────────
 
@@ -90,7 +94,27 @@ public record ProjectDetailDto(
     int      LotCount,
     int      PurchaseOrderCount,
     decimal  TotalPoAmount,
-    List<AssignedContactDto> AssignedContacts);
+    List<AssignedContactDto> AssignedContacts,
+    // ── Carried over from a converted Proposal (null/empty otherwise) ────────
+    int?     SourceProposalId,
+    int?     SourceLibraryId,
+    string?  SourceLibraryTitle,
+    string   Address,
+    string   City,
+    string   ProductStandards,
+    string   Version,
+    string   BuyerUpgrades,
+    string   RevisionsAfterLaunch,
+    List<ProjectUpgradeStateDto> CustomUpgrades,
+    string?  QbProjectId,
+    string?  QbProjectName);
+
+public record ProjectUpgradeStateDto(
+    int    CustomUpgradeId,
+    string Name,
+    string Description,
+    bool   IsGlobal,
+    bool   IsEnabled);
 
 public record AssignedContactDto(
     int    Id,

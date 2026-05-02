@@ -27,7 +27,10 @@ public class BuildingsController : ControllerBase
             .Where(b => b.ProjectId == projectId)
             .Include(b => b.Lots)
                 .ThenInclude(l => l.Address)
-            .OrderBy(b => b.Name)
+            .Include(b => b.Lots)
+                .ThenInclude(l => l.Plan)
+            .Include(b => b.Plans)
+            .OrderBy(b => b.SortOrder).ThenBy(b => b.Name)
             .ToListAsync();
 
         return Ok(buildings.Select(ToDto));
@@ -40,11 +43,17 @@ public class BuildingsController : ControllerBase
         var projectExists = await _db.Projects.AnyAsync(p => p.Id == projectId);
         if (!projectExists) return NotFound(new { message = "Project not found." });
 
+        var maxSort = await _db.Buildings
+            .Where(b => b.ProjectId == projectId)
+            .Select(b => (int?)b.SortOrder)
+            .MaxAsync() ?? -1;
+
         var building = new Building
         {
             ProjectId   = projectId,
             Name        = req.Name.Trim(),
             Description = req.Description?.Trim() ?? string.Empty,
+            SortOrder   = maxSort + 1,
         };
 
         _db.Buildings.Add(building);
@@ -58,6 +67,8 @@ public class BuildingsController : ControllerBase
     {
         var building = await _db.Buildings
             .Include(b => b.Lots).ThenInclude(l => l.Address)
+            .Include(b => b.Lots).ThenInclude(l => l.Plan)
+            .Include(b => b.Plans)
             .FirstOrDefaultAsync(b => b.Id == id && b.ProjectId == projectId);
 
         if (building is null) return NotFound();
@@ -244,6 +255,24 @@ public class BuildingsController : ControllerBase
             errors));
     }
 
+    // PUT /api/project/1/building/reorder
+    [HttpPut("reorder")]
+    public async Task<IActionResult> Reorder(int projectId, [FromBody] ReorderRequest req)
+    {
+        var buildings = await _db.Buildings
+            .Where(b => b.ProjectId == projectId)
+            .ToListAsync();
+
+        for (int i = 0; i < req.OrderedIds.Count; i++)
+        {
+            var b = buildings.FirstOrDefault(x => x.Id == req.OrderedIds[i]);
+            if (b is not null) b.SortOrder = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     // ── Mapping ───────────────────────────────────────────────────────────────
 
     private static BuildingDto ToDto(Building b) => new(
@@ -251,13 +280,17 @@ public class BuildingsController : ControllerBase
         b.ProjectId,
         b.Name,
         b.Description,
-        b.Lots.OrderBy(l => l.Name).Select(LotToDto).ToList());
+        b.Lots.OrderBy(l => l.SortOrder).ThenBy(l => l.Name).Select(LotToDto).ToList(),
+        b.Plans.OrderBy(p => p.PlanName).Select(p => new PlanDto(
+            p.Id, p.BuildingId, p.PlanName, p.SquareFootage, p.Amount)).ToList());
 
     private static LotDto LotToDto(Lot l) => new(
         l.Id,
         l.BuildingId,
         l.Name,
         l.Description,
+        l.PlanId,
+        l.Plan?.PlanName,
         l.Address is null ? null : new AddressDto(
             l.Address.Id,
             l.Address.Address1,

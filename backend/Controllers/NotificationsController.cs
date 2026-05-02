@@ -81,5 +81,6 @@ public class NotificationsController : ControllerBase
     private static NotificationDto ToDto(Notification n) => new(
         n.Id, n.Type, n.Title, n.Body,
         n.IsRead, n.CreatedAt,
-        n.RelatedMessageId, n.RelatedNoteId);
+        n.RelatedMessageId, n.RelatedNoteId, n.RelatedTicketId,
+        n.RelatedProposalId);
 }

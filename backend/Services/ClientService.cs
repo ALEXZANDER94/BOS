@@ -97,6 +97,12 @@ public class ClientService : IClientService
         client.City        = req.City.Trim();
         client.State       = req.State.Trim();
         client.Zip         = req.Zip.Trim();
+        client.ShowContacts  = req.ShowContacts;
+        client.ShowProjects  = req.ShowProjects;
+        client.ShowProposals = req.ShowProposals;
+        client.ShowLibraries = req.ShowLibraries;
+        client.ShowActivity  = req.ShowActivity;
+        client.ShowOptions   = req.ShowOptions;
         client.UpdatedAt   = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -137,7 +143,15 @@ public class ClientService : IClientService
             PrimaryContact: primaryContact is null ? null : ContactToDto(primaryContact),
             ContactCount:   c.Contacts.Count,
             ProjectCount:   c.Projects.Count,
-            ActivityCount:  c.ActivityLogs.Count
+            ActivityCount:  c.ActivityLogs.Count,
+            ShowContacts:   c.ShowContacts,
+            ShowProjects:   c.ShowProjects,
+            ShowProposals:  c.ShowProposals,
+            ShowLibraries:  c.ShowLibraries,
+            ShowActivity:   c.ShowActivity,
+            ShowOptions:    c.ShowOptions,
+            QbCustomerId:   c.QbCustomerId,
+            QbCustomerName: c.QbCustomerName
         );
     }
 

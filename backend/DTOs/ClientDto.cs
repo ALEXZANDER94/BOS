@@ -19,8 +19,21 @@ public record ClientDto(
     ContactDto?  PrimaryContact,
     int          ContactCount,
     int          ProjectCount,
-    int          ActivityCount
+    int          ActivityCount,
+    // Tab visibility
+    bool         ShowContacts,
+    bool         ShowProjects,
+    bool         ShowProposals,
+    bool         ShowLibraries,
+    bool         ShowActivity,
+    bool         ShowOptions,
+    // QuickBooks customer link (cached after auto-match-by-name; manually overridable)
+    string?      QbCustomerId,
+    string?      QbCustomerName
 );
+
+// PATCH /api/client/{id}/qb-customer — pass null id+name to clear the link.
+public record SetClientQbCustomerRequest(string? QbCustomerId, string? QbCustomerName);
 
 public record ContactDto(
     int      Id,
@@ -95,7 +108,13 @@ public record UpdateClientRequest(
     string Street,
     string City,
     string State,
-    string Zip
+    string Zip,
+    bool   ShowContacts,
+    bool   ShowProjects,
+    bool   ShowProposals,
+    bool   ShowLibraries,
+    bool   ShowActivity,
+    bool   ShowOptions
 );
 
 public record CreateContactRequest(

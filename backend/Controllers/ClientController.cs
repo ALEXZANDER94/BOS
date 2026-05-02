@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using BOS.Backend.Data;
 using BOS.Backend.DTOs;
 using BOS.Backend.Services;
 
@@ -9,8 +11,13 @@ namespace BOS.Backend.Controllers;
 public class ClientController : ControllerBase
 {
     private readonly IClientService _clients;
+    private readonly AppDbContext   _db;
 
-    public ClientController(IClientService clients) => _clients = clients;
+    public ClientController(IClientService clients, AppDbContext db)
+    {
+        _clients = clients;
+        _db      = db;
+    }
 
     // GET /api/client?search=acme&status=Active
     [HttpGet]
@@ -51,5 +58,23 @@ public class ClientController : ControllerBase
     {
         var deleted = await _clients.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
+    }
+
+    // PATCH /api/client/5/qb-customer  — manually override or clear the QB customer link.
+    // Pass { qbCustomerId: null, qbCustomerName: null } to clear; the next Estimates/Invoices
+    // tab visit will retry the auto-match-by-name flow.
+    [HttpPatch("{id:int}/qb-customer")]
+    public async Task<IActionResult> SetQbCustomer(int id, [FromBody] SetClientQbCustomerRequest req)
+    {
+        var client = await _db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+        if (client is null) return NotFound();
+
+        client.QbCustomerId   = string.IsNullOrWhiteSpace(req.QbCustomerId)   ? null : req.QbCustomerId.Trim();
+        client.QbCustomerName = string.IsNullOrWhiteSpace(req.QbCustomerName) ? null : req.QbCustomerName.Trim();
+        client.UpdatedAt      = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var dto = await _clients.GetByIdAsync(id);
+        return Ok(dto);
     }
 }

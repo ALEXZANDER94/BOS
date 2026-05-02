@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
+using BOS.Backend.Auth;
 using BOS.Backend.Data;
 using BOS.Backend.Hubs;
 using BOS.Backend.Models;
@@ -23,15 +24,28 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, EmailUserIdProvider>();
 
 // ---------------------------------------------------------------------------
-// Authentication: ASP.NET Core cookie auth + Google OAuth2 provider.
-// The cookie persists the session after Google completes the OAuth flow.
+// Authentication: ASP.NET Core cookie auth + Google OAuth2 provider, plus a
+// Google ID-token bearer scheme used by the Apps Script Gmail Add-on. A policy
+// scheme ("AppAuth") routes each request to the right inner scheme based on
+// whether an Authorization: Bearer header is present.
 // Credentials come from appsettings.json or (preferred) environment variables:
 //   Google__ClientId, Google__ClientSecret, Google__AllowedDomain
 // ---------------------------------------------------------------------------
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultScheme          = CookieAuthenticationDefaults.AuthenticationScheme;
+    options.DefaultScheme          = "AppAuth";
     options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+})
+.AddPolicyScheme("AppAuth", "Cookie or Google ID Token", options =>
+{
+    options.ForwardDefaultSelector = context =>
+    {
+        var auth = context.Request.Headers.Authorization.ToString();
+        if (!string.IsNullOrEmpty(auth) &&
+            auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return GoogleIdTokenAuthenticationOptions.SchemeName;
+        return CookieAuthenticationDefaults.AuthenticationScheme;
+    };
 })
 .AddCookie(options =>
 {
@@ -57,31 +71,37 @@ builder.Services.AddAuthentication(options =>
     // Must exactly match the redirect URI registered in Google Cloud Console.
     options.CallbackPath = "/api/auth/callback";
 
-    // Request Gmail read-only scope in addition to the default profile/email scopes.
-    options.Scope.Add("https://www.googleapis.com/auth/gmail.readonly");
+    // Request Gmail modify scope so BOS can read, send, reply, label, trash, and
+    // mark messages from inside the app. This replaces the previous read-only scope —
+    // existing users will need to sign out and reconnect once to grant the new permission.
+    options.Scope.Add("https://www.googleapis.com/auth/gmail.modify");
 
     // offline access_type is required for Google to issue a refresh token.
     options.AccessType = "offline";
 
-    // SaveTokens stores access_token, refresh_token, and expires_at in the
-    // auth ticket properties so we can read them in OnTicketReceived below.
-    options.SaveTokens = true;
+    // SaveTokens=false keeps the Google access_token / refresh_token / id_token
+    // OUT of the auth ticket cookie. Together they exceed 4KB which forces
+    // chunked cookies (BOS.AuthC1/C2/…) and trips nginx's default 8KB header
+    // line limit ("400 Bad Request: Request Header Or Cookie Too Large").
+    // Tokens are persisted to UserGoogleTokens below and read by GmailService
+    // straight from the DB, so the cookie copy is unnecessary.
+    options.SaveTokens = false;
 
-    // After a successful OAuth exchange, upsert the user's tokens into the DB
-    // so GmailService can retrieve and refresh them on later requests.
-    options.Events.OnTicketReceived = async ctx =>
+    // OnCreatingTicket fires inside the OAuth handler with tokens exposed
+    // directly on the context (independent of SaveTokens). Upsert them into
+    // the DB so GmailService can retrieve and refresh them on later requests.
+    options.Events.OnCreatingTicket = async ctx =>
     {
-        var email = ctx.Principal?.FindFirstValue(ClaimTypes.Email);
+        var email = ctx.Identity?.FindFirst(ClaimTypes.Email)?.Value;
         if (string.IsNullOrEmpty(email)) return;
 
-        var accessToken  = ctx.Properties?.GetTokenValue("access_token");
-        var refreshToken = ctx.Properties?.GetTokenValue("refresh_token");
-        var expiresAt    = ctx.Properties?.GetTokenValue("expires_at");
+        var accessToken  = ctx.AccessToken;
+        var refreshToken = ctx.RefreshToken;
 
         if (string.IsNullOrEmpty(accessToken)) return;
 
-        var expiry = DateTimeOffset.TryParse(expiresAt, out var dto)
-            ? dto.UtcDateTime
+        var expiry = ctx.ExpiresIn.HasValue
+            ? DateTime.UtcNow.Add(ctx.ExpiresIn.Value)
             : DateTime.UtcNow.AddHours(1);
 
         var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
@@ -112,7 +132,21 @@ builder.Services.AddAuthentication(options =>
 
         await db.SaveChangesAsync();
     };
-});
+})
+.AddScheme<GoogleIdTokenAuthenticationOptions, GoogleIdTokenAuthenticationHandler>(
+    GoogleIdTokenAuthenticationOptions.SchemeName, options =>
+    {
+        // Accept tokens issued to the BOS web client *and* the Apps Script Add-on's
+        // OAuth client (since each emits its own client ID as audience).
+        var audiences = new List<string>();
+        var webClient    = builder.Configuration["Google:ClientId"];
+        var addonClient  = builder.Configuration["Google:AddonClientId"];
+        if (!string.IsNullOrWhiteSpace(webClient))   audiences.Add(webClient);
+        if (!string.IsNullOrWhiteSpace(addonClient)) audiences.Add(addonClient);
+
+        options.Audiences     = audiences;
+        options.AllowedDomain = builder.Configuration["Google:AllowedDomain"];
+    });
 
 // ---------------------------------------------------------------------------
 // Database: path is configurable via environment variable or appsettings so
@@ -168,6 +202,21 @@ builder.Services.AddScoped<IQuickBooksService,          QuickBooksService>();
 // Fixtures
 builder.Services.AddScoped<IFixtureService,             FixtureService>();
 
+// Tickets
+builder.Services.AddScoped<ITicketService,              TicketService>();
+builder.Services.AddScoped<ITicketAttachmentService,    TicketAttachmentService>();
+builder.Services.AddHostedService<OverdueTicketNotificationService>();
+
+// Canned responses
+builder.Services.AddScoped<ICannedResponseAttachmentService, CannedResponseAttachmentService>();
+
+// Proposals + Libraries
+builder.Services.AddScoped<ILibraryService,             LibraryService>();
+builder.Services.AddScoped<ICustomUpgradeService,       CustomUpgradeService>();
+builder.Services.AddScoped<IProposalService,            ProposalService>();
+builder.Services.AddScoped<IIifToPdfService,            IifToPdfService>();
+builder.Services.AddHostedService<ProposalDeadlineNotificationService>();
+
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------
@@ -219,7 +268,7 @@ app.MapGet("/api/auth/login", () =>
 // Step 3: Frontend polls this to learn who is logged in.
 // Returns 200 + { name, email } if the cookie is valid, 401 if not authenticated,
 // or 403 if the account is from a disallowed domain.
-app.MapGet("/api/auth/me", (HttpContext ctx) =>
+app.MapGet("/api/auth/me", async (HttpContext ctx, IAppSettingsService settings) =>
 {
     if (ctx.User?.Identity?.IsAuthenticated != true)
         return Results.Unauthorized();
@@ -234,7 +283,8 @@ app.MapGet("/api/auth/me", (HttpContext ctx) =>
     if (!string.IsNullOrEmpty(allowedDomain) && !email.EndsWith($"@{allowedDomain}"))
         return Results.Forbid();
 
-    return Results.Ok(new { name, email });
+    var isAdmin = await settings.IsAdminAsync(email);
+    return Results.Ok(new { name, email, isAdmin });
 });
 
 // Step 4: Logout clears the auth cookie and ends the session.

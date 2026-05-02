@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using BOS.Backend.Data;
 using BOS.Backend.DTOs;
 
 namespace BOS.Backend.Services;
@@ -7,6 +9,7 @@ public interface IWorkspaceService
 {
     Task<IReadOnlyList<WorkspaceUserDto>> GetDomainUsersAsync();
     Task<IReadOnlyList<WorkspaceUserDto>> GetGroupMembersAsync(string groupEmail);
+    Task<IReadOnlyList<WorkspaceUserDto>> GetKnownTicketUsersAsync();
 }
 
 public class WorkspaceService : IWorkspaceService
@@ -14,12 +17,42 @@ public class WorkspaceService : IWorkspaceService
     private readonly IConfiguration      _config;
     private readonly IHttpClientFactory  _http;
     private readonly ILogger<WorkspaceService> _logger;
+    private readonly AppDbContext        _db;
 
-    public WorkspaceService(IConfiguration config, IHttpClientFactory http, ILogger<WorkspaceService> logger)
+    public WorkspaceService(IConfiguration config, IHttpClientFactory http, ILogger<WorkspaceService> logger, AppDbContext db)
     {
         _config = config;
         _http   = http;
         _logger = logger;
+        _db     = db;
+    }
+
+    // Returns the union of every distinct email that has touched the ticket
+    // system (creator, assignee, comment author, watcher). Used as a fallback
+    // for the assignee filter when the Google Workspace service account isn't
+    // configured — without this, the dropdown is empty until Workspace is set up.
+    public async Task<IReadOnlyList<WorkspaceUserDto>> GetKnownTicketUsersAsync()
+    {
+        var creators  = await _db.Tickets.Select(t => t.CreatedByEmail).Distinct().ToListAsync();
+        var assignees = await _db.Tickets
+            .Where(t => t.AssignedToEmail != null && t.AssignedToEmail != "")
+            .Select(t => t.AssignedToEmail!)
+            .Distinct()
+            .ToListAsync();
+        var commenters = await _db.TicketComments.Select(c => c.AuthorEmail).Distinct().ToListAsync();
+        var watchers   = await _db.TicketWatchers.Select(w => w.UserEmail).Distinct().ToListAsync();
+
+        var emails = creators
+            .Concat(assignees)
+            .Concat(commenters)
+            .Concat(watchers)
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .Select(e => e.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(e => e, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return emails.Select(e => new WorkspaceUserDto(e, e)).ToList();
     }
 
     // ── Public interface ──────────────────────────────────────────────────────

@@ -23,7 +23,8 @@ public class LotsController : ControllerBase
         var lots = await _db.Lots
             .Where(l => l.BuildingId == buildingId)
             .Include(l => l.Address)
-            .OrderBy(l => l.Name)
+            .Include(l => l.Plan)
+            .OrderBy(l => l.SortOrder).ThenBy(l => l.Name)
             .ToListAsync();
 
         return Ok(lots.Select(ToDto));
@@ -36,15 +37,30 @@ public class LotsController : ControllerBase
         var buildingExists = await _db.Buildings.AnyAsync(b => b.Id == buildingId);
         if (!buildingExists) return NotFound(new { message = "Building not found." });
 
+        // Validate Plan belongs to this Building if provided.
+        if (req.PlanId is not null)
+        {
+            var planOk = await _db.Plans.AnyAsync(p => p.Id == req.PlanId && p.BuildingId == buildingId);
+            if (!planOk) return BadRequest(new { message = "Plan does not belong to this building." });
+        }
+
+        var maxSort = await _db.Lots
+            .Where(l => l.BuildingId == buildingId)
+            .Select(l => (int?)l.SortOrder)
+            .MaxAsync() ?? -1;
+
         var lot = new Lot
         {
             BuildingId  = buildingId,
             Name        = req.Name.Trim(),
             Description = req.Description?.Trim() ?? string.Empty,
+            PlanId      = req.PlanId,
+            SortOrder   = maxSort + 1,
         };
 
         _db.Lots.Add(lot);
         await _db.SaveChangesAsync();
+        await _db.Entry(lot).Reference(l => l.Plan).LoadAsync();
         return Ok(ToDto(lot));
     }
 
@@ -54,13 +70,22 @@ public class LotsController : ControllerBase
     {
         var lot = await _db.Lots
             .Include(l => l.Address)
+            .Include(l => l.Plan)
             .FirstOrDefaultAsync(l => l.Id == id && l.BuildingId == buildingId);
 
         if (lot is null) return NotFound();
 
+        if (req.PlanId is not null)
+        {
+            var planOk = await _db.Plans.AnyAsync(p => p.Id == req.PlanId && p.BuildingId == buildingId);
+            if (!planOk) return BadRequest(new { message = "Plan does not belong to this building." });
+        }
+
         lot.Name        = req.Name.Trim();
         lot.Description = req.Description?.Trim() ?? string.Empty;
+        lot.PlanId      = req.PlanId;
         await _db.SaveChangesAsync();
+        await _db.Entry(lot).Reference(l => l.Plan).LoadAsync();
         return Ok(ToDto(lot));
     }
 
@@ -135,6 +160,24 @@ public class LotsController : ControllerBase
         return NoContent();
     }
 
+    // PUT /api/building/3/lot/reorder
+    [HttpPut("reorder")]
+    public async Task<IActionResult> Reorder(int buildingId, [FromBody] ReorderRequest req)
+    {
+        var lots = await _db.Lots
+            .Where(l => l.BuildingId == buildingId)
+            .ToListAsync();
+
+        for (int i = 0; i < req.OrderedIds.Count; i++)
+        {
+            var l = lots.FirstOrDefault(x => x.Id == req.OrderedIds[i]);
+            if (l is not null) l.SortOrder = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     // ── Mapping ───────────────────────────────────────────────────────────────
 
     private static LotDto ToDto(Lot l) => new(
@@ -142,6 +185,8 @@ public class LotsController : ControllerBase
         l.BuildingId,
         l.Name,
         l.Description,
+        l.PlanId,
+        l.Plan?.PlanName,
         l.Address is null ? null : new AddressDto(
             l.Address.Id,
             l.Address.Address1,

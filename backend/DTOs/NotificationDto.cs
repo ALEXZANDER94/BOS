@@ -8,4 +8,6 @@ public record NotificationDto(
     bool     IsRead,
     DateTime CreatedAt,
     string?  RelatedMessageId,
-    int?     RelatedNoteId);
+    int?     RelatedNoteId,
+    int?     RelatedTicketId,
+    int?     RelatedProposalId);

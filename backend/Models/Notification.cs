@@ -11,4 +11,6 @@ public class Notification
     public DateTime CreatedAt        { get; set; }
     public string?  RelatedMessageId { get; set; }
     public int?     RelatedNoteId    { get; set; }
+    public int?     RelatedTicketId   { get; set; }
+    public int?     RelatedProposalId { get; set; }
 }

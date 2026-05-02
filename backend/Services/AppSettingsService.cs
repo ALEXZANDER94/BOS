@@ -32,6 +32,8 @@ public interface IAppSettingsService
     Task<string?> GetAsync(string key);
     Task SetAsync(string key, string? value);
 
+    Task<bool> IsAdminAsync(string email);
+
     Task<AdobeCredentialsDto> GetAdobeCredentialsAsync();
     Task SetAdobeCredentialsAsync(string clientId, string clientSecret);
     Task ClearAdobeCredentialsAsync();
@@ -51,8 +53,27 @@ public class AppSettingsService : IAppSettingsService
     public const string AdobeClientSecretKey = "Adobe:ClientSecret";
     public const string AdobeCountKey        = "Adobe:MonthlyCount";
     public const string AdobeCountMonthKey   = "Adobe:CountMonth";
+    public const string AdminEmailsKey        = "AdminEmails";
+    public const string AdminNoticeKey        = "AdminNotice";
+
+    // Name of the QuickBooks custom field that carries a BOS Project ID on
+    // Estimates/Invoices. When set, any QB document whose CustomField with this
+    // name equals the project's id is auto-included on the project's Estimates
+    // tab without needing an explicit ProjectQbEstimateLink/ProjectQbInvoiceLink row.
+    public const string QbProjectCustomFieldKey = "QuickBooks:ProjectCustomFieldName";
 
     public AppSettingsService(AppDbContext db) => _db = db;
+
+    // ── Admin check ──────────────────────────────────────────────────────────
+
+    public async Task<bool> IsAdminAsync(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        var adminEmails = await GetAsync(AdminEmailsKey) ?? "";
+        return adminEmails
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(e => string.Equals(e, email, StringComparison.OrdinalIgnoreCase));
+    }
 
     // ── Generic key-value helpers ────────────────────────────────────────────
 

@@ -46,6 +46,8 @@ public class ProjectService : IProjectService
         var project = await _db.Projects
             .Include(p => p.Client)
             .Include(p => p.ProjectContacts).ThenInclude(pc => pc.Contact)
+            .Include(p => p.SourceLibrary)
+            .Include(p => p.CustomUpgrades).ThenInclude(cu => cu.CustomUpgrade)
             .FirstOrDefaultAsync(p => p.Id == id);
 
         if (project is null) return null;
@@ -82,7 +84,25 @@ public class ProjectService : IProjectService
                 pc.Contact.Email,
                 pc.Contact.Phone,
                 pc.Contact.Title
-            )).ToList()
+            )).ToList(),
+            project.SourceProposalId,
+            project.SourceLibraryId,
+            project.SourceLibrary?.Title,
+            project.Address,
+            project.City,
+            project.ProductStandards,
+            project.Version,
+            project.BuyerUpgrades,
+            project.RevisionsAfterLaunch,
+            project.CustomUpgrades.Select(cu => new ProjectUpgradeStateDto(
+                cu.CustomUpgradeId,
+                cu.CustomUpgrade?.Name ?? "",
+                cu.CustomUpgrade?.Description ?? "",
+                cu.CustomUpgrade?.IsGlobal ?? false,
+                cu.IsEnabled
+            )).ToList(),
+            project.QbProjectId,
+            project.QbProjectName
         );
     }
 

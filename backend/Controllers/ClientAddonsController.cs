@@ -233,7 +233,8 @@ public class ClientAddonsController : ControllerBase
             if (!string.IsNullOrEmpty(priceRaw) &&
                 !priceRaw.Equals("N/A", StringComparison.OrdinalIgnoreCase))
             {
-                if (decimal.TryParse(priceRaw, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+                var cleaned = priceRaw.Replace("$", "").Replace(",", "").Trim();
+                if (decimal.TryParse(cleaned, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
                     price = parsed;
             }
 

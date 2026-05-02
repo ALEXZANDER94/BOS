@@ -144,11 +144,123 @@ namespace BOS.Backend.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("project_id");
 
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProjectId");
 
                     b.ToTable("Buildings");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.CannedResponse", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BodyHtml")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByUserEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultBcc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultCc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultTo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.ToTable("CannedResponses");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.CannedResponseAttachment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CannedResponseId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StoredFileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UploadedByEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CannedResponseId");
+
+                    b.ToTable("CannedResponseAttachments");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.CannedResponseCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByUserEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CannedResponseCategories");
                 });
 
             modelBuilder.Entity("BOS.Backend.Models.Client", b =>
@@ -179,6 +291,44 @@ namespace BOS.Backend.Data.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("QbCustomerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("qb_customer_id");
+
+                    b.Property<string>("QbCustomerName")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("qb_customer_name");
+
+                    b.Property<bool>("ShowActivity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ShowContacts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ShowLibraries")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ShowOptions")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ShowProjects")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ShowProposals")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("State")
                         .IsRequired()
@@ -348,6 +498,48 @@ namespace BOS.Backend.Data.Migrations
                     b.ToTable("Contacts");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.CustomUpgrade", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<int?>("ClientId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsGlobal")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_global");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("IsGlobal");
+
+                    b.ToTable("CustomUpgrades");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.EmailAssignment", b =>
                 {
                     b.Property<int>("Id")
@@ -490,6 +682,43 @@ namespace BOS.Backend.Data.Migrations
                     b.HasIndex("MessageId");
 
                     b.ToTable("EmailNotes");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.EmailSignature", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AliasEmail")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BodyHtml")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerUserEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserEmail", "AliasEmail");
+
+                    b.ToTable("EmailSignatures");
                 });
 
             modelBuilder.Entity("BOS.Backend.Models.Fixture", b =>
@@ -648,6 +877,75 @@ namespace BOS.Backend.Data.Migrations
                     b.ToTable("GlossaryUnitStatuses");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.Library", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<int>("ClientId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("client_id");
+
+                    b.Property<long>("ContentLength")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("content_length");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("description");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("original_file_name");
+
+                    b.Property<string>("StoredFileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("stored_file_name");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.ToTable("Libraries");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.LibraryUpgrade", b =>
+                {
+                    b.Property<int>("LibraryId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("library_id");
+
+                    b.Property<int>("CustomUpgradeId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("custom_upgrade_id");
+
+                    b.HasKey("LibraryId", "CustomUpgradeId");
+
+                    b.HasIndex("CustomUpgradeId");
+
+                    b.ToTable("LibraryUpgrades");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.Lot", b =>
                 {
                     b.Property<int>("Id")
@@ -669,9 +967,18 @@ namespace BOS.Backend.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("name");
 
+                    b.Property<int?>("PlanId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("plan_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BuildingId");
+
+                    b.HasIndex("PlanId");
 
                     b.ToTable("Lots");
                 });
@@ -711,6 +1018,13 @@ namespace BOS.Backend.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("related_note_id");
 
+                    b.Property<int?>("RelatedProposalId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("RelatedTicketId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("related_ticket_id");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -730,11 +1044,63 @@ namespace BOS.Backend.Data.Migrations
                     b.ToTable("Notifications");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.Plan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("building_id");
+
+                    b.Property<string>("PlanName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("plan_name");
+
+                    b.Property<int>("SquareFootage")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("square_footage");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingId");
+
+                    b.ToTable("Plans");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.Project", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("address");
+
+                    b.Property<string>("BuyerUpgrades")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("buyer_upgrades");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("city");
 
                     b.Property<int>("ClientId")
                         .HasColumnType("INTEGER")
@@ -754,6 +1120,36 @@ namespace BOS.Backend.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ProductStandards")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("product_standards");
+
+                    b.Property<string>("QbProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("qb_project_id");
+
+                    b.Property<string>("QbProjectName")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("qb_project_name");
+
+                    b.Property<string>("RevisionsAfterLaunch")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("revisions_after_launch");
+
+                    b.Property<int?>("SourceLibraryId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("source_library_id");
+
+                    b.Property<int?>("SourceProposalId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("source_proposal_id");
+
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("TEXT");
 
@@ -766,9 +1162,20 @@ namespace BOS.Backend.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("version");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClientId");
+
+                    b.HasIndex("SourceLibraryId");
+
+                    b.HasIndex("SourceProposalId");
 
                     b.ToTable("Projects");
                 });
@@ -815,6 +1222,332 @@ namespace BOS.Backend.Data.Migrations
                     b.HasIndex("ContactId");
 
                     b.ToTable("ProjectContacts");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProjectCustomUpgrade", b =>
+                {
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("project_id");
+
+                    b.Property<int>("CustomUpgradeId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("custom_upgrade_id");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_enabled");
+
+                    b.HasKey("ProjectId", "CustomUpgradeId");
+
+                    b.HasIndex("CustomUpgradeId");
+
+                    b.ToTable("ProjectCustomUpgrades");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProjectQbEstimateLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("linked_at");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("QbEstimateId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("qb_estimate_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("QbEstimateId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectQbEstimateLinks");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProjectQbInvoiceLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("FromEstimateId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("from_estimate_id");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("linked_at");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("QbInvoiceId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("qb_invoice_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("QbInvoiceId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectQbInvoiceLinks");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.Proposal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("address");
+
+                    b.Property<string>("BuyerUpgrades")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("buyer_upgrades");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("city");
+
+                    b.Property<int>("ClientId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("client_id");
+
+                    b.Property<int?>("ConvertedProjectId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("converted_project_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedByEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("Deadline")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeadlineNotifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DeadlineReminderDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("LibraryId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("library_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PdfContentLength")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PdfFileName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PdfStoredFileName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProductStandards")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("product_standards");
+
+                    b.Property<string>("RevisionsAfterLaunch")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("revisions_after_launch");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Draft")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("SingleFamily")
+                        .HasColumnName("type");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("version");
+
+                    b.Property<string>("VisibleFields")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("LibraryId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("Proposals");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProposalBuilding", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<int>("ProposalId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("proposal_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProposalId");
+
+                    b.ToTable("ProposalBuildings");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProposalCustomUpgrade", b =>
+                {
+                    b.Property<int>("ProposalId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("proposal_id");
+
+                    b.Property<int>("CustomUpgradeId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("custom_upgrade_id");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_enabled");
+
+                    b.HasKey("ProposalId", "CustomUpgradeId");
+
+                    b.HasIndex("CustomUpgradeId");
+
+                    b.ToTable("ProposalCustomUpgrades");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProposalPlan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("PlanName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("plan_name");
+
+                    b.Property<int>("ProposalBuildingId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("proposal_building_id");
+
+                    b.Property<int>("SquareFootage")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("square_footage");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProposalBuildingId");
+
+                    b.ToTable("ProposalPlans");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProposalPricing", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PricePerSqFt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ProposalId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProposalId");
+
+                    b.ToTable("ProposalPricings");
                 });
 
             modelBuilder.Entity("BOS.Backend.Models.PurchaseOrder", b =>
@@ -979,6 +1712,311 @@ namespace BOS.Backend.Data.Migrations
                     b.ToTable("Suppliers");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.Ticket", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AssignedToEmail")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("assigned_to_email");
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("category_id");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("closed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedByEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by_email");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("due_date");
+
+                    b.Property<string>("LinkedEmailMessageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("linked_email_message_id");
+
+                    b.Property<DateTime?>("OverdueNotifiedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("overdue_notified_at");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Medium")
+                        .HasColumnName("priority");
+
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("project_id");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedToEmail");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("CreatedByEmail");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("StatusId");
+
+                    b.ToTable("Tickets");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketAttachment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("file_name");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("file_size");
+
+                    b.Property<string>("StoredFileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("stored_file_name");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("uploaded_at");
+
+                    b.Property<string>("UploadedByEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("uploaded_by_email");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketAttachments");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("#6b7280")
+                        .HasColumnName("color");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("TicketCategories");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketComment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AuthorEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("author_email");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("body");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsPrivate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_private");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketComments");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("changed_at");
+
+                    b.Property<string>("ChangedByEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("changed_by_email");
+
+                    b.Property<string>("FieldChanged")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("field_changed");
+
+                    b.Property<string>("NewValue")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("new_value");
+
+                    b.Property<string>("OldValue")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("old_value");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ticket_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketHistory");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketStatus", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("#6b7280")
+                        .HasColumnName("color");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("display_order");
+
+                    b.Property<bool>("IsClosed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_closed");
+
+                    b.Property<bool>("IsDefault")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_default");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("TicketStatuses");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketWatcher", b =>
+                {
+                    b.Property<int>("TicketId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<string>("UserEmail")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_email");
+
+                    b.HasKey("TicketId", "UserEmail");
+
+                    b.ToTable("TicketWatchers");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.UserGoogleToken", b =>
                 {
                     b.Property<int>("Id")
@@ -1074,6 +2112,28 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.CannedResponse", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.CannedResponseCategory", "Category")
+                        .WithMany("Responses")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.CannedResponseAttachment", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.CannedResponse", "CannedResponse")
+                        .WithMany("Attachments")
+                        .HasForeignKey("CannedResponseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CannedResponse");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.ClientAddon", b =>
                 {
                     b.HasOne("BOS.Backend.Models.Client", "Client")
@@ -1103,6 +2163,16 @@ namespace BOS.Backend.Data.Migrations
                         .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.CustomUpgrade", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Client");
                 });
@@ -1172,10 +2242,58 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Supplier");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.Library", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.LibraryUpgrade", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.CustomUpgrade", "CustomUpgrade")
+                        .WithMany()
+                        .HasForeignKey("CustomUpgradeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BOS.Backend.Models.Library", "Library")
+                        .WithMany("LibraryUpgrades")
+                        .HasForeignKey("LibraryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CustomUpgrade");
+
+                    b.Navigation("Library");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.Lot", b =>
                 {
                     b.HasOne("BOS.Backend.Models.Building", "Building")
                         .WithMany("Lots")
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BOS.Backend.Models.Plan", "Plan")
+                        .WithMany("Lots")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Building");
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.Plan", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Building", "Building")
+                        .WithMany("Plans")
                         .HasForeignKey("BuildingId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1191,7 +2309,21 @@ namespace BOS.Backend.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("BOS.Backend.Models.Library", "SourceLibrary")
+                        .WithMany()
+                        .HasForeignKey("SourceLibraryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BOS.Backend.Models.Proposal", "SourceProposal")
+                        .WithMany()
+                        .HasForeignKey("SourceProposalId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Client");
+
+                    b.Navigation("SourceLibrary");
+
+                    b.Navigation("SourceProposal");
                 });
 
             modelBuilder.Entity("BOS.Backend.Models.ProjectAddonAssignment", b =>
@@ -1232,6 +2364,117 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.ProjectCustomUpgrade", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.CustomUpgrade", "CustomUpgrade")
+                        .WithMany()
+                        .HasForeignKey("CustomUpgradeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BOS.Backend.Models.Project", "Project")
+                        .WithMany("CustomUpgrades")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CustomUpgrade");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProjectQbEstimateLink", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProjectQbInvoiceLink", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.Proposal", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BOS.Backend.Models.Library", "Library")
+                        .WithMany()
+                        .HasForeignKey("LibraryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Client");
+
+                    b.Navigation("Library");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProposalBuilding", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Proposal", "Proposal")
+                        .WithMany("Buildings")
+                        .HasForeignKey("ProposalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Proposal");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProposalCustomUpgrade", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.CustomUpgrade", "CustomUpgrade")
+                        .WithMany()
+                        .HasForeignKey("CustomUpgradeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BOS.Backend.Models.Proposal", "Proposal")
+                        .WithMany("CustomUpgrades")
+                        .HasForeignKey("ProposalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CustomUpgrade");
+
+                    b.Navigation("Proposal");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProposalPlan", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.ProposalBuilding", "ProposalBuilding")
+                        .WithMany("Plans")
+                        .HasForeignKey("ProposalBuildingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProposalBuilding");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProposalPricing", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Proposal", "Proposal")
+                        .WithMany("Pricings")
+                        .HasForeignKey("ProposalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Proposal");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.PurchaseOrder", b =>
                 {
                     b.HasOne("BOS.Backend.Models.PurchaseOrderStatus", "InternalStatus")
@@ -1258,11 +2501,92 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.Ticket", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.TicketCategory", "Category")
+                        .WithMany("Tickets")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BOS.Backend.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BOS.Backend.Models.TicketStatus", "Status")
+                        .WithMany("Tickets")
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketAttachment", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Ticket", "Ticket")
+                        .WithMany("Attachments")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketComment", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Ticket", "Ticket")
+                        .WithMany("Comments")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketHistory", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Ticket", "Ticket")
+                        .WithMany("History")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketWatcher", b =>
+                {
+                    b.HasOne("BOS.Backend.Models.Ticket", "Ticket")
+                        .WithMany("Watchers")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.Building", b =>
                 {
                     b.Navigation("Fixtures");
 
                     b.Navigation("Lots");
+
+                    b.Navigation("Plans");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.CannedResponse", b =>
+                {
+                    b.Navigation("Attachments");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.CannedResponseCategory", b =>
+                {
+                    b.Navigation("Responses");
                 });
 
             modelBuilder.Entity("BOS.Backend.Models.Client", b =>
@@ -1296,6 +2620,11 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Fixtures");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.Library", b =>
+                {
+                    b.Navigation("LibraryUpgrades");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.Lot", b =>
                 {
                     b.Navigation("Address");
@@ -1303,9 +2632,30 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("PurchaseOrders");
                 });
 
+            modelBuilder.Entity("BOS.Backend.Models.Plan", b =>
+                {
+                    b.Navigation("Lots");
+                });
+
             modelBuilder.Entity("BOS.Backend.Models.Project", b =>
                 {
+                    b.Navigation("CustomUpgrades");
+
                     b.Navigation("ProjectContacts");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.Proposal", b =>
+                {
+                    b.Navigation("Buildings");
+
+                    b.Navigation("CustomUpgrades");
+
+                    b.Navigation("Pricings");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.ProposalBuilding", b =>
+                {
+                    b.Navigation("Plans");
                 });
 
             modelBuilder.Entity("BOS.Backend.Models.PurchaseOrderStatus", b =>
@@ -1318,6 +2668,27 @@ namespace BOS.Backend.Data.Migrations
                     b.Navigation("Criteria");
 
                     b.Navigation("GlossaryUnits");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.Ticket", b =>
+                {
+                    b.Navigation("Attachments");
+
+                    b.Navigation("Comments");
+
+                    b.Navigation("History");
+
+                    b.Navigation("Watchers");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketCategory", b =>
+                {
+                    b.Navigation("Tickets");
+                });
+
+            modelBuilder.Entity("BOS.Backend.Models.TicketStatus", b =>
+                {
+                    b.Navigation("Tickets");
                 });
 #pragma warning restore 612, 618
         }

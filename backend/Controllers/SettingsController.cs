@@ -66,7 +66,36 @@ public class SettingsController : ControllerBase
         await _settings.ClearAdobeCredentialsAsync();
         return Ok(new { message = "Credentials removed." });
     }
+
+    /// <summary>
+    /// GET /api/settings/quickbooks
+    /// Returns the QuickBooks-related app settings.
+    /// </summary>
+    [HttpGet("quickbooks")]
+    public async Task<IActionResult> GetQuickBooksSettings()
+    {
+        var fieldName = await _settings.GetAsync(AppSettingsService.QbProjectCustomFieldKey);
+        return Ok(new QuickBooksSettingsDto(fieldName));
+    }
+
+    /// <summary>
+    /// PUT /api/settings/quickbooks
+    /// Updates QuickBooks-related app settings. Pass null/empty
+    /// projectCustomFieldName to disable Approach A (custom-field auto-linking).
+    /// </summary>
+    [HttpPut("quickbooks")]
+    public async Task<IActionResult> UpdateQuickBooksSettings([FromBody] UpdateQuickBooksSettingsRequest req)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(req.ProjectCustomFieldName)
+            ? null
+            : req.ProjectCustomFieldName.Trim();
+        await _settings.SetAsync(AppSettingsService.QbProjectCustomFieldKey, trimmed);
+        return Ok(new QuickBooksSettingsDto(trimmed));
+    }
 }
+
+public record QuickBooksSettingsDto(string? ProjectCustomFieldName);
+public record UpdateQuickBooksSettingsRequest(string? ProjectCustomFieldName);
 
 /// <summary>Request body for POST /api/settings/adobe/credentials.</summary>
 public record SetAdobeCredentialsRequest(string ClientId, string ClientSecret);

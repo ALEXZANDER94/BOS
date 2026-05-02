@@ -9,6 +9,8 @@ export interface Notification {
   createdAt:        string
   relatedMessageId: string | null
   relatedNoteId:    number | null
+  relatedTicketId:   number | null
+  relatedProposalId: number | null
 }
 
 const BASE = '/api/notifications'

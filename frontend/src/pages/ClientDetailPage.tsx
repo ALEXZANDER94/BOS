@@ -6,8 +6,11 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ContactsPanel from '@/components/clients/ContactsPanel'
 import ProjectsPanel from '@/components/clients/ProjectsPanel'
+import ProposalsPanel from '@/components/clients/ProposalsPanel'
+import LibrariesPanel from '@/components/clients/LibrariesPanel'
 import ActivityPanel from '@/components/clients/ActivityPanel'
 import ClientOptionsTab from '@/components/clients/ClientOptionsTab'
+import ClientQbDocumentsPanel from '@/components/clients/ClientQbDocumentsPanel'
 import EditClientModal from '@/components/clients/EditClientModal'
 import DeleteClientModal from '@/components/clients/DeleteClientModal'
 import { useClient } from '@/hooks/useClients'
@@ -143,49 +146,94 @@ export default function ClientDetailPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="contacts">
-        <TabsList>
-          <TabsTrigger value="contacts">
-            Contacts
-            {client.contactCount > 0 && (
-              <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
-                {client.contactCount}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="projects">
-            Projects
-            {client.projectCount > 0 && (
-              <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
-                {client.projectCount}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="activity">
-            Activity Log
-            {client.activityCount > 0 && (
-              <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
-                {client.activityCount}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="options">Options</TabsTrigger>
-        </TabsList>
+      {/* Tabs — each tab is conditionally rendered based on per-client visibility flags */}
+      {(() => {
+        // Pick the first visible tab as the default. Falls back to 'contacts'
+        // (which will simply render nothing if all tabs are hidden — the user
+        // would have to re-enable at least one via Edit Client).
+        const firstVisible =
+          client.showContacts  ? 'contacts'  :
+          client.showProjects  ? 'projects'  :
+          client.showProposals ? 'proposals' :
+          client.showLibraries ? 'libraries' :
+          client.showActivity  ? 'activity'  :
+          client.showOptions   ? 'options'   : 'contacts'
 
-        <TabsContent value="contacts" className="mt-5 max-w-2xl">
-          <ContactsPanel clientId={client.id} />
-        </TabsContent>
-        <TabsContent value="projects" className="mt-5 max-w-2xl">
-          <ProjectsPanel clientId={client.id} />
-        </TabsContent>
-        <TabsContent value="activity" className="mt-5 max-w-2xl">
-          <ActivityPanel clientId={client.id} />
-        </TabsContent>
-        <TabsContent value="options" className="mt-5">
-          <ClientOptionsTab clientId={client.id} />
-        </TabsContent>
-      </Tabs>
+        return (
+          <Tabs defaultValue={firstVisible}>
+            <TabsList>
+              {client.showContacts && (
+                <TabsTrigger value="contacts">
+                  Contacts
+                  {client.contactCount > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
+                      {client.contactCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )}
+              {client.showProjects && (
+                <TabsTrigger value="projects">
+                  Projects
+                  {client.projectCount > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
+                      {client.projectCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )}
+              {client.showProposals && <TabsTrigger value="proposals">Proposals</TabsTrigger>}
+              {client.showLibraries && <TabsTrigger value="libraries">Libraries</TabsTrigger>}
+              {client.showActivity && (
+                <TabsTrigger value="activity">
+                  Activity Log
+                  {client.activityCount > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
+                      {client.activityCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )}
+              <TabsTrigger value="qb-documents">Estimates &amp; Invoices</TabsTrigger>
+              {client.showOptions && <TabsTrigger value="options">Options</TabsTrigger>}
+            </TabsList>
+
+            {client.showContacts && (
+              <TabsContent value="contacts" className="mt-5 max-w-2xl">
+                <ContactsPanel clientId={client.id} />
+              </TabsContent>
+            )}
+            {client.showProjects && (
+              <TabsContent value="projects" className="mt-5 max-w-2xl">
+                <ProjectsPanel clientId={client.id} />
+              </TabsContent>
+            )}
+            {client.showProposals && (
+              <TabsContent value="proposals" className="mt-5 max-w-3xl">
+                <ProposalsPanel clientId={client.id} />
+              </TabsContent>
+            )}
+            {client.showLibraries && (
+              <TabsContent value="libraries" className="mt-5 max-w-3xl">
+                <LibrariesPanel clientId={client.id} />
+              </TabsContent>
+            )}
+            {client.showActivity && (
+              <TabsContent value="activity" className="mt-5 max-w-2xl">
+                <ActivityPanel clientId={client.id} />
+              </TabsContent>
+            )}
+            <TabsContent value="qb-documents" className="mt-5">
+              <ClientQbDocumentsPanel clientId={client.id} />
+            </TabsContent>
+            {client.showOptions && (
+              <TabsContent value="options" className="mt-5">
+                <ClientOptionsTab clientId={client.id} />
+              </TabsContent>
+            )}
+          </Tabs>
+        )
+      })()}
 
       {/* Modals */}
       {editOpen && (

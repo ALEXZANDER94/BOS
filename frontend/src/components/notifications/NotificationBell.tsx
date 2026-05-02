@@ -14,6 +14,7 @@ import type { Notification } from '@/api/notifications'
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
+  if (diff < 0)    return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' })
   const min  = Math.floor(diff / 60_000)
   if (min < 1)   return 'just now'
   if (min < 60)  return `${min}m ago`
@@ -35,7 +36,11 @@ function NotificationRow({
 
   function handleClick() {
     if (!notification.isRead) onRead(notification.id)
-    if (notification.relatedMessageId) {
+    if (notification.relatedTicketId) {
+      navigate(`/tickets/${notification.relatedTicketId}`)
+    } else if (notification.relatedProposalId) {
+      navigate(`/proposals`)
+    } else if (notification.relatedMessageId) {
       navigate(`/emails?select=${encodeURIComponent(notification.relatedMessageId)}`)
     }
   }

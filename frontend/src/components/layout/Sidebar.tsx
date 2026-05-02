@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Building2, BookOpen, FileSearch, Settings2, Users, FolderKanban, Mail, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Building2, BookOpen, FileSearch, Settings2, Users, FolderKanban, Mail, ChevronLeft, ChevronRight, LayoutDashboard, TicketCheck, FileText, Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ── Nav structure ─────────────────────────────────────────────────────────────
@@ -9,16 +9,20 @@ type NavItem =
   | { kind: 'section'; label: string }
 
 const navItems: NavItem[] = [
+  { kind: 'link',    to: '/',            label: 'Dashboard',        icon: LayoutDashboard },
   { kind: 'link',    to: '/suppliers',   label: 'Suppliers',        icon: Building2  },
   { kind: 'link',    to: '/glossary',    label: 'Unit Glossary',    icon: BookOpen   },
   { kind: 'link',    to: '/comparison',  label: 'Price Comparison', icon: FileSearch },
 
   { kind: 'section', label: 'CRM' },
   { kind: 'link',    to: '/clients',     label: 'Clients',          icon: Users         },
+  { kind: 'link',    to: '/proposals',   label: 'Proposals',        icon: FileText      },
   { kind: 'link',    to: '/projects',    label: 'Projects',         icon: FolderKanban  },
   { kind: 'link',    to: '/emails',      label: 'Emails',           icon: Mail          },
+  { kind: 'link',    to: '/tickets',     label: 'Tickets',          icon: TicketCheck   },
 
   { kind: 'section', label: 'System' },
+  { kind: 'link',    to: '/tools',       label: 'Tools',            icon: Wrench    },
   { kind: 'link',    to: '/settings',    label: 'Settings',         icon: Settings2 },
 ]
 

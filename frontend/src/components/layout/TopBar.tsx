@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { LogOut, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import axios from 'axios'
 
 interface TopBarProps {
@@ -25,6 +26,7 @@ export default function TopBar({ user }: TopBarProps) {
 
       {/* Right side: notifications + user info + logout */}
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         <NotificationBell />
 
         <div className="flex items-center gap-2 text-sm">

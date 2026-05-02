@@ -17,6 +17,7 @@ import {
 import { clientAddonsApi, type ClientAddon, type ProjectAssignment } from '@/api/clientAddons'
 import { projectApi, type Project } from '@/api/clients'
 import ImportAddonsModal from './ImportAddonsModal'
+import CustomUpgradesPanel from './CustomUpgradesPanel'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -550,6 +551,10 @@ export default function ClientOptionsTab({ clientId }: { clientId: number }) {
       {importOpen && (
         <ImportAddonsModal clientId={clientId} projects={projects} onClose={() => setImportOpen(false)} />
       )}
+
+      <div className="pt-6 border-t">
+        <CustomUpgradesPanel clientId={clientId} />
+      </div>
     </div>
   )
 }

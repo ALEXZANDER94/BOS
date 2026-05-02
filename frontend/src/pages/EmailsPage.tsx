@@ -1,9 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { ticketApi } from '@/api/tickets'
 import {
   RefreshCw, Mail, MailOpen, AlertCircle, Inbox, Search, X,
-  Settings2, Eye, EyeOff, ChevronDown, ChevronUp, Paperclip,
+  Settings2, Eye, EyeOff, ChevronDown, ChevronUp, Paperclip, TicketCheck,
+  Reply, ReplyAll, Forward, Archive, Trash2, MailMinus, Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,8 +14,10 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import {
   useEmails, useEmailDetail, useRefreshEmails, useGmailStatus, useGmailAliases,
+  useArchiveMessage, useTrashMessage, useMarkRead,
   type EmailFilter,
 } from '@/hooks/useGmail'
+import { ComposeDialog, type ComposeMode } from '@/components/email/ComposeDialog'
 import { gmailApi } from '@/api/gmail'
 import { useClients } from '@/hooks/useClients'
 import {
@@ -23,6 +28,7 @@ import { CategoryManagementDialog } from '@/components/email/CategoryManagementD
 import { EmailAssignmentPanel } from '@/components/email/EmailAssignmentPanel'
 import { EmailNotesPanel } from '@/components/email/EmailNotesPanel'
 import { AddToBosButton } from '@/components/email/AddToBosButton'
+import { CreateTicketDialog } from '@/components/tickets/CreateTicketDialog'
 import { emailNotesApi, type EmailNoteCounts } from '@/api/emailNotes'
 import type { EmailSummary } from '@/api/gmail'
 import type { EmailAssignment } from '@/api/emailCategories'
@@ -102,13 +108,14 @@ function SidebarBtn({
 // ── Email list item ───────────────────────────────────────────────────────────
 
 function EmailRow({
-  email, isSelected, assignment, noteCount, onClick,
+  email, isSelected, assignment, noteCount, threadCount, onClick,
 }: {
-  email:       EmailSummary
-  isSelected:  boolean
-  assignment?: EmailAssignment
-  noteCount?:  number
-  onClick:     () => void
+  email:        EmailSummary
+  isSelected:   boolean
+  assignment?:  EmailAssignment
+  noteCount?:   number
+  threadCount?: number
+  onClick:      () => void
 }) {
   return (
     <button
@@ -120,8 +127,16 @@ function EmailRow({
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-0.5">
-        <span className={cn('text-sm truncate', !email.isRead && 'font-semibold')}>
-          {displayName(email)}
+        <span className={cn('text-sm truncate flex items-center gap-1.5', !email.isRead && 'font-semibold')}>
+          <span className="truncate">{displayName(email)}</span>
+          {threadCount && threadCount > 1 && (
+            <span
+              className="inline-flex items-center justify-center rounded-full bg-muted text-muted-foreground text-[10px] leading-none px-1.5 py-0.5 shrink-0"
+              title={`${threadCount} messages in this thread`}
+            >
+              {threadCount}
+            </span>
+          )}
         </span>
         <span className="text-[11px] text-muted-foreground shrink-0">
           {formatDate(email.receivedAt)}
@@ -228,12 +243,42 @@ function EmailDetailPanel({
   messageId,
   noteKey,
   clients,
+  onAfterRemove,
 }: {
   messageId: string
   noteKey?:  string
   clients:   Client[]
+  onAfterRemove: () => void
 }) {
+  const navigate = useNavigate()
+  const [createTicketOpen, setCreateTicketOpen] = useState(false)
+  const [inlineMode, setInlineMode] = useState<ComposeMode | null>(null)
+  const [inlineMsgId, setInlineMsgId] = useState(messageId)
   const { data: detail, isLoading } = useEmailDetail(messageId)
+  const archiveMut  = useArchiveMessage()
+  const trashMut    = useTrashMessage()
+  const markReadMut = useMarkRead()
+
+  const { data: threadMessages } = useQuery({
+    queryKey: ['gmail', 'thread', detail?.threadId],
+    queryFn:  () => gmailApi.getThread(detail!.threadId),
+    enabled:  !!detail?.threadId && !!inlineMode,
+  })
+
+  // Reset inline mode when switching emails — derived from prop, no effect needed
+  if (messageId !== inlineMsgId) {
+    setInlineMode(null)
+    setInlineMsgId(messageId)
+  }
+
+  // Look up tickets already linked to this email (uses RFC Message-ID when available
+  // — same value the create-ticket dialog stores).
+  const linkedKey = detail?.rfcMessageId ?? messageId
+  const { data: linkedTickets = [] } = useQuery({
+    queryKey: ['email-tickets', linkedKey],
+    queryFn:  () => ticketApi.getByEmail(linkedKey),
+    enabled:  !!detail,
+  })
 
   if (isLoading) {
     return (
@@ -251,8 +296,84 @@ function EmailDetailPanel({
     )
   }
 
+  async function handleArchive() {
+    try {
+      await archiveMut.mutateAsync(messageId)
+      toast.success('Archived')
+      onAfterRemove()
+    } catch { toast.error('Archive failed') }
+  }
+  async function handleTrash() {
+    try {
+      await trashMut.mutateAsync(messageId)
+      toast.success('Moved to trash')
+      onAfterRemove()
+    } catch { toast.error('Trash failed') }
+  }
+  async function handleMarkUnread() {
+    try {
+      await markReadMut.mutateAsync({ messageId, read: false })
+      toast.success('Marked unread')
+    } catch { toast.error('Mark unread failed') }
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* Action toolbar */}
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border bg-muted/20">
+        <Button size="sm" variant={inlineMode === 'reply' ? 'secondary' : 'ghost'} className="h-7 px-2 text-xs"
+          onClick={() => setInlineMode(inlineMode === 'reply' ? null : 'reply')}
+          title="Reply"
+        >
+          <Reply className="h-3.5 w-3.5 mr-1" /> Reply
+        </Button>
+        <Button size="sm" variant={inlineMode === 'replyAll' ? 'secondary' : 'ghost'} className="h-7 px-2 text-xs"
+          onClick={() => setInlineMode(inlineMode === 'replyAll' ? null : 'replyAll')}
+          title="Reply all"
+        >
+          <ReplyAll className="h-3.5 w-3.5 mr-1" /> Reply all
+        </Button>
+        <Button size="sm" variant={inlineMode === 'forward' ? 'secondary' : 'ghost'} className="h-7 px-2 text-xs"
+          onClick={() => setInlineMode(inlineMode === 'forward' ? null : 'forward')}
+          title="Forward"
+        >
+          <Forward className="h-3.5 w-3.5 mr-1" /> Forward
+        </Button>
+        <span className="mx-1 h-4 w-px bg-border" />
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
+          onClick={handleArchive}
+          disabled={archiveMut.isPending}
+          title="Archive"
+        >
+          <Archive className="h-3.5 w-3.5" />
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+          onClick={handleTrash}
+          disabled={trashMut.isPending}
+          title="Move to trash"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
+          onClick={handleMarkUnread}
+          disabled={markReadMut.isPending}
+          title="Mark unread"
+        >
+          <MailMinus className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {/* Inline compose (reply / forward) */}
+      {inlineMode && detail && (
+        <ComposeDialog
+          open={true}
+          onClose={() => setInlineMode(null)}
+          mode={inlineMode}
+          source={detail}
+          inline
+        />
+      )}
+
       {/* Header */}
       <div className="px-5 py-4 border-b border-border space-y-1">
         <h3 className="text-base font-semibold leading-snug">{detail.subject}</h3>
@@ -292,6 +413,38 @@ function EmailDetailPanel({
           <div className="pt-0.5">
             <EmailAssignmentPanel messageId={messageId} noteKey={noteKey} />
           </div>
+          {linkedTickets.length > 0 && (
+            <div className="pt-1 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                <TicketCheck className="h-3.5 w-3.5" />
+                {linkedTickets.length} ticket{linkedTickets.length !== 1 ? 's' : ''} linked:
+              </span>
+              {linkedTickets.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => navigate(`/tickets/${t.id}`)}
+                  title={t.title}
+                  className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50 transition-colors"
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: t.statusColor }}
+                  />
+                  <span className="font-mono">{t.ticketNumber}</span>
+                  <span className="max-w-[140px] truncate">{t.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="pt-1">
+            <button
+              onClick={() => setCreateTicketOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <TicketCheck className="h-3.5 w-3.5" />
+              {linkedTickets.length > 0 ? 'Create Another Ticket' : 'Create Ticket from Email'}
+            </button>
+          </div>
           {detail.attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1">
               {detail.attachments.map(att => (
@@ -312,23 +465,71 @@ function EmailDetailPanel({
         </div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-auto px-5 py-4">
-        {detail.bodyHtml ? (
-          <iframe
-            srcDoc={detail.bodyHtml}
-            sandbox="allow-same-origin"
-            className="w-full h-full border-none"
-            title="Email body"
-          />
-        ) : detail.bodyText ? (
-          <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-            {detail.bodyText}
-          </pre>
+      {/* Body / Thread */}
+      <div className="flex-1 overflow-auto">
+        {inlineMode && threadMessages && threadMessages.length > 0 ? (
+          // Thread view: show all messages when inline compose is active
+          <div className="divide-y divide-border">
+            {threadMessages.map((msg, i) => (
+              <div key={msg.messageId} className="px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {msg.fromName || msg.fromAddress}
+                    </span>
+                    <span className="mx-1.5">to</span>
+                    <span>{msg.toAddresses}</span>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground">
+                    {new Date(msg.receivedAt).toLocaleString()}
+                  </span>
+                </div>
+                {msg.bodyHtml ? (
+                  <iframe
+                    srcDoc={msg.bodyHtml}
+                    sandbox="allow-same-origin"
+                    className="w-full border-none"
+                    style={{ minHeight: i === threadMessages.length - 1 ? 200 : 120 }}
+                    title={`Thread message ${i + 1}`}
+                  />
+                ) : msg.bodyText ? (
+                  <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                    {msg.bodyText}
+                  </pre>
+                ) : null}
+              </div>
+            ))}
+          </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No body content.</p>
+          // Single message view
+          <div className="px-5 py-4 h-full">
+            {detail.bodyHtml ? (
+              <iframe
+                srcDoc={detail.bodyHtml}
+                sandbox="allow-same-origin"
+                className="w-full h-full border-none"
+                title="Email body"
+              />
+            ) : detail.bodyText ? (
+              <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                {detail.bodyText}
+              </pre>
+            ) : (
+              <p className="text-sm text-muted-foreground">No body content.</p>
+            )}
+          </div>
         )}
       </div>
+
+      <CreateTicketDialog
+        open={createTicketOpen}
+        onClose={() => setCreateTicketOpen(false)}
+        prefill={{
+          title:                detail.subject || '',
+          linkedEmailMessageId: detail.rfcMessageId ?? messageId,
+          linkedEmailSubject:   detail.subject || '',
+        }}
+      />
     </div>
   )
 }
@@ -343,6 +544,21 @@ export default function EmailsPage() {
   const [searchInput, setSearchInput]             = useState('')
   const [search, setSearch]                       = useState('')
   const [isEditingAliases, setIsEditingAliases]   = useState(false)
+
+  // Compose dialog state. `composeSourceId` drives reply/replyAll/forward; we look up
+  // the full EmailDetail off the active selection so the dialog can build a quoted body.
+  const [composeOpen,     setComposeOpen]     = useState(false)
+  const [composeMode,     setComposeMode]     = useState<ComposeMode>('new')
+  const [composeSourceId, setComposeSourceId] = useState<string | null>(null)
+  const { data: composeSource } = useEmailDetail(
+    composeOpen && composeMode !== 'new' ? composeSourceId : null,
+  )
+
+  function openCompose(mode: ComposeMode, sourceMessageId: string | null = null) {
+    setComposeMode(mode)
+    setComposeSourceId(sourceMessageId)
+    setComposeOpen(true)
+  }
 
   // Deep-link from notification: /emails?select=<id>
   // The id may be a Gmail-internal message ID (hex) or an RFC 2822 Message-ID (contains '@').
@@ -457,6 +673,77 @@ export default function EmailsPage() {
   const emails: EmailSummary[] = filter.type === 'category' && selectedStatusId !== null
     ? allEmails.filter(e => effectiveAssignmentMap[e.messageId]?.statusId === selectedStatusId)
     : allEmails
+
+  // Collapse by Gmail threadId so a reply doesn't produce a second row for the same conversation.
+  // Representative row = most-recent message in the thread; counts/flags aggregate across the
+  // thread so a note on an older message or an assignment on a newer one still surfaces.
+  const threadGroups = useMemo(() => {
+    const byThread = new Map<string, {
+      representative: EmailSummary
+      messageIds:     string[]
+      count:          number
+      anyUnread:      boolean
+      noteCountSum:   number
+      assignment?:    EmailAssignment
+      assignmentAt:   number          // receivedAt of the message the assignment came from
+    }>()
+
+    for (const e of emails) {
+      const threadKey   = e.threadId || e.messageId
+      const receivedMs  = new Date(e.receivedAt).getTime()
+      const msgNotes    = noteCounts[e.messageId] ?? 0
+      const msgAssign   = effectiveAssignmentMap[e.messageId]
+
+      const existing = byThread.get(threadKey)
+      if (!existing) {
+        byThread.set(threadKey, {
+          representative: e,
+          messageIds:     [e.messageId],
+          count:          1,
+          anyUnread:      !e.isRead,
+          noteCountSum:   msgNotes,
+          assignment:     msgAssign,
+          assignmentAt:   msgAssign ? receivedMs : -Infinity,
+        })
+      } else {
+        existing.messageIds.push(e.messageId)
+        existing.count       += 1
+        existing.anyUnread    = existing.anyUnread || !e.isRead
+        existing.noteCountSum += msgNotes
+        // Keep the freshest message as the row representative.
+        if (receivedMs > new Date(existing.representative.receivedAt).getTime()) {
+          existing.representative = e
+        }
+        // Prefer the most-recent assignment across the thread.
+        if (msgAssign && receivedMs >= existing.assignmentAt) {
+          existing.assignment   = msgAssign
+          existing.assignmentAt = receivedMs
+        }
+      }
+    }
+
+    return Array.from(byThread.values())
+      .sort((a, b) =>
+        new Date(b.representative.receivedAt).getTime() -
+        new Date(a.representative.receivedAt).getTime()
+      )
+  }, [emails, effectiveAssignmentMap, noteCounts])
+
+  // Fast membership lookup so a thread row highlights whenever *any* of its messages
+  // is the currently selected one (supports deep-links to specific messages inside a thread).
+  const selectedThreadId = useMemo(() => {
+    if (!selectedMessageId) return null
+    return emails.find(e => e.messageId === selectedMessageId)?.threadId ?? null
+  }, [selectedMessageId, emails])
+
+  // Fetch the detail of the currently selected email when its summary isn't in the list
+  // (e.g. deep-link from a ticket to an older email). Gives us a reliable source of the RFC
+  // Message-ID for note-key resolution. Skipped when the summary is already available to
+  // avoid a redundant fetch — EmailDetailPanel has its own useEmailDetail which will still
+  // run for body rendering, and react-query will dedupe if the request is needed.
+  const needsDetailFallback = !!selectedMessageId
+    && !allEmails.some(e => e.messageId === selectedMessageId)
+  const { data: detailFallback } = useEmailDetail(needsDetailFallback ? selectedMessageId : null)
 
   const lastFetched = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -626,6 +913,15 @@ export default function EmailsPage() {
               )}
             </div>
             <div className="flex items-center gap-1.5">
+              {/* Compose new */}
+              <Button
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => openCompose('new', null)}
+                title="Compose new email"
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Compose
+              </Button>
               {/* Page size selector */}
               {filter.type !== 'category' && (
                 <select
@@ -700,23 +996,33 @@ export default function EmailsPage() {
             <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
               Loading…
             </div>
-          ) : emails.length === 0 ? (
+          ) : threadGroups.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-16 text-center px-4">
               <Inbox className="h-6 w-6 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">No emails found.</p>
             </div>
           ) : (
             <>
-              {emails.map(email => (
-                <EmailRow
-                  key={email.messageId}
-                  email={email}
-                  isSelected={selectedMessageId === email.messageId}
-                  assignment={effectiveAssignmentMap[email.messageId]}
-                  noteCount={noteCounts[email.messageId]}
-                  onClick={() => setSelectedMessageId(email.messageId)}
-                />
-              ))}
+              {threadGroups.map(group => {
+                const rep          = group.representative
+                const rowIsUnread  = group.anyUnread
+                const effectiveRep = rowIsUnread === rep.isRead
+                  ? { ...rep, isRead: !rowIsUnread }
+                  : rep
+                return (
+                  <EmailRow
+                    key={rep.threadId || rep.messageId}
+                    email={effectiveRep}
+                    isSelected={selectedThreadId
+                      ? (rep.threadId || rep.messageId) === selectedThreadId
+                      : selectedMessageId === rep.messageId}
+                    assignment={group.assignment}
+                    noteCount={group.noteCountSum}
+                    threadCount={group.count}
+                    onClick={() => setSelectedMessageId(rep.messageId)}
+                  />
+                )
+              })}
               {/* Load more */}
               {hasNextPage && filter.type !== 'category' && (
                 <div className="px-4 py-3">
@@ -735,16 +1041,16 @@ export default function EmailsPage() {
           )}
         </div>
 
-        {/* Unread / total count */}
-        {emails.length > 0 && (
+        {/* Unread / total count — counts are over threads, matching what the user sees */}
+        {threadGroups.length > 0 && (
           <div className="px-4 py-2 border-t border-border text-[11px] text-muted-foreground flex items-center gap-3">
             <span className="flex items-center gap-1">
               <Mail className="h-3 w-3" />
-              {emails.filter(e => !e.isRead).length} unread
+              {threadGroups.filter(g => g.anyUnread).length} unread
             </span>
             <span className="flex items-center gap-1">
               <MailOpen className="h-3 w-3" />
-              {emails.length} shown
+              {threadGroups.length} shown
             </span>
           </div>
         )}
@@ -752,22 +1058,50 @@ export default function EmailsPage() {
 
       {/* ── Detail panel ── */}
       <div className="flex-1 flex overflow-hidden">
-        {selectedMessageId ? (
+        {composeOpen ? (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <ComposeDialog
+              open={true}
+              onClose={() => setComposeOpen(false)}
+              mode={composeMode}
+              source={composeMode !== 'new' ? composeSource ?? undefined : undefined}
+              inline
+            />
+          </div>
+        ) : selectedMessageId ? (() => {
+          const selectedEmail = allEmails.find(e => e.messageId === selectedMessageId)
+          // Fall back to the email's detail when the list summary is unavailable (e.g. deep-link
+          // from a ticket/notification to an email outside the current page). The detail is
+          // already fetched by EmailDetailPanel — react-query dedupes the request. Without this,
+          // noteKey would be undefined and EmailNotesPanel would silently shard notes under the
+          // per-user Gmail message-ID instead of the stable RFC Message-ID.
+          const noteKey = selectedEmail?.rfcMessageId
+                        ?? detailFallback?.rfcMessageId
+                        ?? undefined
+          // When not explicitly filtering by alias, try to detect which alias
+          // the email was addressed to so mention autocomplete still shows group members.
+          const detectedAlias = filter.type !== 'alias'
+            ? aliases.find(a => selectedEmail?.toAddresses?.toLowerCase().includes(a.toLowerCase()))
+            : undefined
+          const effectiveAliasFilter = filter.type === 'alias' ? filter.address : detectedAlias
+          return (
           <>
             <div className="flex-1 flex flex-col overflow-hidden">
               <EmailDetailPanel
                 messageId={selectedMessageId}
-                noteKey={allEmails.find(e => e.messageId === selectedMessageId)?.rfcMessageId ?? undefined}
+                noteKey={noteKey}
                 clients={clients}
+                onAfterRemove={() => setSelectedMessageId(null)}
               />
             </div>
             <EmailNotesPanel
               messageId={selectedMessageId}
-              noteKey={allEmails.find(e => e.messageId === selectedMessageId)?.rfcMessageId ?? undefined}
-              aliasFilter={filter.type === 'alias' ? filter.address : undefined}
+              noteKey={noteKey}
+              aliasFilter={effectiveAliasFilter}
             />
           </>
-        ) : (
+          )
+        })() : (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center">
             <Mail className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Select an email to read it</p>

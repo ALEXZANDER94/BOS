@@ -5,7 +5,7 @@ import {
   ArrowLeft, Building2, ChevronDown, ChevronRight,
   MapPin, Pencil, Plus, RefreshCw, Trash2, X, Check,
   CheckCircle2, AlertCircle, Upload, Settings2,
-  ChevronsUpDown, Download, ArrowUp, ArrowDown, ArrowUpDown,
+  ChevronsUpDown, Download, ArrowUp, ArrowDown, ArrowUpDown, TicketCheck,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
@@ -33,11 +33,13 @@ import {
   projectDetailApi,
   buildingApi,
   lotApi,
+  planApi,
   purchaseOrderApi,
   purchaseOrderStatusApi,
   quickBooksApi,
   type Building,
   type Lot,
+  type Plan,
   type PurchaseOrder,
   type PurchaseOrderStatus,
   type UpsertAddressRequest,
@@ -48,7 +50,9 @@ import ManagePoStatusesDialog from '@/components/projects/ManagePoStatusesDialog
 import ProjectOptionsPanel from '@/components/projects/ProjectOptionsPanel'
 import FixturesPanel from '@/components/projects/FixturesPanel'
 import ImportBuildingsModal from '@/components/projects/ImportBuildingsModal'
+import EstimatesTab from '@/components/projects/EstimatesTab'
 import { fixtureApi } from '@/api/fixtures'
+import { CreateTicketDialog } from '@/components/tickets/CreateTicketDialog'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -76,7 +80,7 @@ function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
 
-type Tab = 'overview' | 'buildings' | 'pos' | 'fixtures' | 'options'
+type Tab = 'overview' | 'buildings' | 'estimates' | 'pos' | 'fixtures' | 'options'
 
 // ── Edit Project dialog ───────────────────────────────────────────────────────
 
@@ -251,10 +255,20 @@ function AddressForm({
 
 function LotRow({
   lot,
+  plans,
   onChanged,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
 }: {
-  lot:       Lot
-  onChanged: () => void
+  lot:        Lot
+  plans:      Plan[]
+  onChanged:  () => void
+  onMoveUp:   () => void
+  onMoveDown: () => void
+  isFirst:    boolean
+  isLast:     boolean
 }) {
   const [editingName, setEditingName] = useState(false)
   const [editingAddr, setEditingAddr] = useState(false)
@@ -262,9 +276,19 @@ function LotRow({
   const [desc, setDesc]               = useState(lot.description)
 
   const updateMut = useMutation({
-    mutationFn: () => lotApi.update(lot.buildingId, lot.id, { name: name.trim(), description: desc.trim() }),
+    mutationFn: () => lotApi.update(lot.buildingId, lot.id, {
+      name: name.trim(), description: desc.trim(), planId: lot.planId,
+    }),
     onSuccess:  () => { setEditingName(false); onChanged() },
     onError:    () => toast.error('Failed to update lot.'),
+  })
+
+  const planMut = useMutation({
+    mutationFn: (planId: number | null) => lotApi.update(lot.buildingId, lot.id, {
+      name: lot.name, description: lot.description, planId,
+    }),
+    onSuccess:  onChanged,
+    onError:    () => toast.error('Failed to assign plan.'),
   })
 
   const deleteMut = useMutation({
@@ -307,10 +331,36 @@ function LotRow({
           </button>
         </div>
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium">{lot.name}</span>
           {lot.description && (
             <span className="text-xs text-muted-foreground">— {lot.description}</span>
+          )}
+          {plans.length > 0 && (
+            <select
+              value={lot.planId ?? ''}
+              onChange={e => planMut.mutate(e.target.value ? Number(e.target.value) : null)}
+              disabled={planMut.isPending}
+              className="text-[10px] h-5 rounded border border-border bg-background px-1"
+              title="Plan"
+            >
+              <option value="">— No plan —</option>
+              {plans.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.planName}
+                </option>
+              ))}
+            </select>
+          )}
+          {!isFirst && (
+            <button onClick={onMoveUp} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted" title="Move up">
+              <ArrowUp className="h-3 w-3" />
+            </button>
+          )}
+          {!isLast && (
+            <button onClick={onMoveDown} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted" title="Move down">
+              <ArrowDown className="h-3 w-3" />
+            </button>
           )}
           <button
             onClick={() => { setName(lot.name); setDesc(lot.description); setEditingName(true) }}
@@ -383,12 +433,20 @@ function BuildingCard({
   expanded,
   onToggle,
   onChanged,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
 }: {
-  building:  Building
-  projectId: number
-  expanded:  boolean
-  onToggle:  () => void
-  onChanged: () => void
+  building:   Building
+  projectId:  number
+  expanded:   boolean
+  onToggle:   () => void
+  onChanged:  () => void
+  onMoveUp:   () => void
+  onMoveDown: () => void
+  isFirst:    boolean
+  isLast:     boolean
 }) {
   const [editingName,  setEditingName]  = useState(false)
   const [addingLot,    setAddingLot]    = useState(false)
@@ -409,8 +467,23 @@ function BuildingCard({
     onError:    () => toast.error('Failed to delete building.'),
   })
 
+  const reorderLotMut = useMutation({
+    mutationFn: (orderedIds: number[]) => lotApi.reorder(building.id, orderedIds),
+    onSuccess:  onChanged,
+    onError:    () => toast.error('Failed to reorder lots.'),
+  })
+
+  function moveLot(index: number, dir: -1 | 1) {
+    const ids = building.lots.map(l => l.id)
+    const target = index + dir
+    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    reorderLotMut.mutate(ids)
+  }
+
   const addLotMut = useMutation({
-    mutationFn: () => lotApi.create(building.id, { name: newLotName.trim(), description: newLotDesc.trim() }),
+    mutationFn: () => lotApi.create(building.id, {
+      name: newLotName.trim(), description: newLotDesc.trim(), planId: null,
+    }),
     onSuccess:  () => { setAddingLot(false); setNewLotName(''); setNewLotDesc(''); onChanged() },
     onError:    () => toast.error('Failed to add lot.'),
   })
@@ -450,6 +523,16 @@ function BuildingCard({
               {building.lots.length} lot{building.lots.length !== 1 ? 's' : ''}
             </span>
             <div className="ml-auto flex items-center gap-1">
+              {!isFirst && (
+                <button onClick={onMoveUp} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted" title="Move up">
+                  <ArrowUp className="h-3 w-3" />
+                </button>
+              )}
+              {!isLast && (
+                <button onClick={onMoveDown} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted" title="Move down">
+                  <ArrowDown className="h-3 w-3" />
+                </button>
+              )}
               <button
                 onClick={() => { setName(building.name); setDesc(building.description); setEditingName(true) }}
                 className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -477,8 +560,17 @@ function BuildingCard({
             <p className="text-xs text-muted-foreground py-1">No lots yet.</p>
           )}
 
-          {building.lots.map(lot => (
-            <LotRow key={lot.id} lot={lot} onChanged={onChanged} />
+          {building.lots.map((lot, i) => (
+            <LotRow
+              key={lot.id}
+              lot={lot}
+              plans={building.plans}
+              onChanged={onChanged}
+              onMoveUp={() => moveLot(i, -1)}
+              onMoveDown={() => moveLot(i, 1)}
+              isFirst={i === 0}
+              isLast={i === building.lots.length - 1}
+            />
           ))}
 
           {addingLot ? (
@@ -509,14 +601,161 @@ function BuildingCard({
             </div>
           ) : (
             <button
-              onClick={() => setAddingLot(true)}
+              onClick={() => {
+                const nums = building.lots.map(l => parseInt(l.name)).filter(n => !isNaN(n))
+                setNewLotName(String((nums.length ? Math.max(...nums) : building.lots.length) + 1))
+                setAddingLot(true)
+              }}
               className="ml-6 pl-4 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mt-1"
             >
               <Plus className="h-3 w-3" /> Add lot
             </button>
           )}
 
+          <BuildingPlansSection building={building} onChanged={onChanged} />
+
           <FixturesPanel buildingId={building.id} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Building Plans (project-side) ─────────────────────────────────────────────
+
+function BuildingPlansSection({
+  building,
+  onChanged,
+}: {
+  building:  Building
+  onChanged: () => void
+}) {
+  const [adding,    setAdding]    = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [name,      setName]      = useState('')
+  const [sqft,      setSqft]      = useState('')
+  const [amount,    setAmount]    = useState('')
+
+  function reset() {
+    setAdding(false)
+    setEditingId(null)
+    setName('')
+    setSqft('')
+    setAmount('')
+  }
+
+  const createMut = useMutation({
+    mutationFn: () => planApi.create(building.id, {
+      planName: name.trim(),
+      squareFootage: Number(sqft) || 0,
+      amount: Number(amount) || 0,
+    }),
+    onSuccess: () => { reset(); onChanged() },
+    onError:   () => toast.error('Failed to add plan.'),
+  })
+
+  const updateMut = useMutation({
+    mutationFn: (id: number) => planApi.update(building.id, id, {
+      planName: name.trim(),
+      squareFootage: Number(sqft) || 0,
+      amount: Number(amount) || 0,
+    }),
+    onSuccess: () => { reset(); onChanged() },
+    onError:   () => toast.error('Failed to update plan.'),
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => planApi.delete(building.id, id),
+    onSuccess:  onChanged,
+    onError:    () => toast.error('Failed to delete plan.'),
+  })
+
+  function startEdit(p: Plan) {
+    setEditingId(p.id)
+    setName(p.planName)
+    setSqft(String(p.squareFootage))
+    setAmount(String(p.amount))
+  }
+
+  return (
+    <div className="mt-3 pt-2 border-t border-dashed border-border">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Plans
+        </span>
+        {!adding && editingId === null && (
+          <button
+            onClick={() => setAdding(true)}
+            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            <Plus className="h-2.5 w-2.5" /> Add plan
+          </button>
+        )}
+      </div>
+      {building.plans.length === 0 && !adding && (
+        <p className="text-[10px] text-muted-foreground italic">No plans.</p>
+      )}
+      {building.plans.length > 0 && (
+        <div className="space-y-0.5">
+          {building.plans.map(p =>
+            editingId === p.id ? (
+              <div key={p.id} className="grid grid-cols-12 gap-1 items-center">
+                <Input value={name} onChange={e => setName(e.target.value)} className="col-span-5 h-6 text-[11px]" />
+                <Input type="number" value={sqft} onChange={e => setSqft(e.target.value)} className="col-span-3 h-6 text-[11px]" />
+                <Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className="col-span-3 h-6 text-[11px]" />
+                <div className="col-span-1 flex items-center gap-0.5">
+                  <button onClick={() => updateMut.mutate(p.id)} className="p-0.5 text-primary"><Check className="h-3 w-3" /></button>
+                  <button onClick={reset} className="p-0.5 text-muted-foreground"><X className="h-3 w-3" /></button>
+                </div>
+              </div>
+            ) : (
+              <div key={p.id} className="grid grid-cols-12 gap-1 items-center text-[11px]">
+                <div className="col-span-5 font-medium truncate">{p.planName}</div>
+                <div className="col-span-3 text-muted-foreground">{p.squareFootage} sqft</div>
+                <div className="col-span-3 text-muted-foreground">{fmtCurrency(p.amount)}</div>
+                <div className="col-span-1 flex items-center gap-0.5">
+                  <button onClick={() => startEdit(p)} className="p-0.5 text-muted-foreground hover:text-foreground"><Pencil className="h-2.5 w-2.5" /></button>
+                  <button onClick={() => deleteMut.mutate(p.id)} className="p-0.5 text-muted-foreground hover:text-destructive"><Trash2 className="h-2.5 w-2.5" /></button>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      )}
+      {adding && (
+        <div className="grid grid-cols-12 gap-1 items-center mt-1">
+          <Input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Plan name"
+            className="col-span-5 h-6 text-[11px]"
+            autoFocus
+          />
+          <Input
+            type="number"
+            value={sqft}
+            onChange={e => setSqft(e.target.value)}
+            placeholder="Sq ft"
+            className="col-span-3 h-6 text-[11px]"
+          />
+          <Input
+            type="number"
+            step="0.01"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            placeholder="Price"
+            className="col-span-3 h-6 text-[11px]"
+          />
+          <div className="col-span-1 flex items-center gap-0.5">
+            <button
+              onClick={() => createMut.mutate()}
+              disabled={!name.trim() || createMut.isPending}
+              className="p-0.5 text-primary"
+            >
+              <Check className="h-3 w-3" />
+            </button>
+            <button onClick={reset} className="p-0.5 text-muted-foreground"><X className="h-3 w-3" /></button>
+          </div>
         </div>
       )}
     </div>
@@ -586,7 +825,7 @@ function AddPoDialog({
       }
 
       if (isNewLot) {
-        const l = await lotApi.create(resolvedBuildingId, { name: newLotName.trim(), description: '' })
+        const l = await lotApi.create(resolvedBuildingId, { name: newLotName.trim(), description: '', planId: null })
         resolvedLotId = l.id
       } else {
         resolvedLotId = Number(lotValue)
@@ -1162,6 +1401,19 @@ function BuildingsTab({ projectId }: { projectId: number }) {
     onError:    () => toast.error('Failed to add building.'),
   })
 
+  const reorderBuildMut = useMutation({
+    mutationFn: (orderedIds: number[]) => buildingApi.reorder(projectId, orderedIds),
+    onSuccess:  invalidate,
+    onError:    () => toast.error('Failed to reorder buildings.'),
+  })
+
+  function moveBuilding(index: number, dir: -1 | 1) {
+    const ids = buildings.map(b => b.id)
+    const target = index + dir
+    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    reorderBuildMut.mutate(ids)
+  }
+
   return (
     <div className="space-y-3">
       {/* Expand / Collapse All */}
@@ -1190,7 +1442,7 @@ function BuildingsTab({ projectId }: { projectId: number }) {
           <p className="text-sm text-muted-foreground">No buildings yet.</p>
         </div>
       ) : (
-        buildings.map(b => (
+        buildings.map((b, i) => (
           <BuildingCard
             key={b.id}
             building={b}
@@ -1198,6 +1450,10 @@ function BuildingsTab({ projectId }: { projectId: number }) {
             expanded={isExpanded(b.id)}
             onToggle={() => setExpanded(b.id, !isExpanded(b.id))}
             onChanged={invalidate}
+            onMoveUp={() => moveBuilding(i, -1)}
+            onMoveDown={() => moveBuilding(i, 1)}
+            isFirst={i === 0}
+            isLast={i === buildings.length - 1}
           />
         ))
       )}
@@ -1230,7 +1486,11 @@ function BuildingsTab({ projectId }: { projectId: number }) {
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setAddingBuilding(true)}>
+          <Button variant="outline" size="sm" onClick={() => {
+            const nums = buildings.map(b => parseInt(b.name)).filter(n => !isNaN(n))
+            setNewBuildName(String((nums.length ? Math.max(...nums) : buildings.length) + 1))
+            setAddingBuilding(true)
+          }}>
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Building
           </Button>
           <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
@@ -1360,8 +1620,9 @@ export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
   const projectId = Number(id)
   const qc = useQueryClient()
-  const [tab,      setTab]      = useState<Tab>('overview')
-  const [editOpen, setEditOpen] = useState(false)
+  const [tab,              setTab]              = useState<Tab>('overview')
+  const [editOpen,         setEditOpen]         = useState(false)
+  const [createTicketOpen, setCreateTicketOpen] = useState(false)
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project-detail', projectId],
@@ -1408,14 +1669,22 @@ export default function ProjectDetailPage() {
           >
             {project.status}
           </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setEditOpen(true)}
-            className="ml-auto"
-          >
-            <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCreateTicketOpen(true)}
+            >
+              <TicketCheck className="h-3.5 w-3.5 mr-1.5" /> New Ticket
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditOpen(true)}
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+            </Button>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
           <Link to={`/clients/${project.clientId}`} className="hover:underline text-foreground">
@@ -1430,10 +1699,11 @@ export default function ProjectDetailPage() {
       {/* Tabs */}
       <div className="border-b border-border">
         <nav className="-mb-px flex gap-6">
-          {(['overview', 'buildings', 'pos', 'fixtures', 'options'] as Tab[]).map(t => {
+          {(['overview', 'buildings', 'estimates', 'pos', 'fixtures', 'options'] as Tab[]).map(t => {
             const labels: Record<Tab, string> = {
               overview:  'Overview',
               buildings: 'Buildings & Lots',
+              estimates: 'Estimates',
               pos:       'Purchase Orders',
               fixtures:  'Fixtures',
               options:   'Options',
@@ -1502,10 +1772,75 @@ export default function ProjectDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Carried over from a converted Proposal */}
+          {project.sourceProposalId && (
+            <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">From Proposal</h3>
+                <Badge variant="outline" className="text-[10px]">Converted</Badge>
+              </div>
+              {project.sourceLibraryTitle && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Source Library</p>
+                  <p className="text-sm">{project.sourceLibraryTitle}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                {(project.address || project.city) && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Address</p>
+                    <p className="text-sm">{[project.address, project.city].filter(Boolean).join(', ')}</p>
+                  </div>
+                )}
+                {project.productStandards && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Product Standards</p>
+                    <p className="text-sm">{project.productStandards}</p>
+                  </div>
+                )}
+                {project.version && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Version</p>
+                    <p className="text-sm">{project.version}</p>
+                  </div>
+                )}
+              </div>
+              {project.buyerUpgrades && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Buyer Upgrades</p>
+                  <p className="text-sm whitespace-pre-wrap">{project.buyerUpgrades}</p>
+                </div>
+              )}
+              {project.revisionsAfterLaunch && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Revisions After Launch</p>
+                  <p className="text-sm whitespace-pre-wrap">{project.revisionsAfterLaunch}</p>
+                </div>
+              )}
+              {project.customUpgrades.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Custom Upgrades</p>
+                  <div className="flex flex-wrap gap-1">
+                    {project.customUpgrades.map(u => (
+                      <Badge
+                        key={u.customUpgradeId}
+                        variant={u.isEnabled ? 'default' : 'secondary'}
+                        className="text-[10px]"
+                      >
+                        {u.isEnabled ? '✓ ' : '○ '}{u.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {tab === 'buildings' && <BuildingsTab projectId={projectId} />}
+      {tab === 'estimates' && <EstimatesTab projectId={projectId} />}
       {tab === 'pos'       && <PurchaseOrdersTab projectId={projectId} />}
       {tab === 'fixtures'  && <ProjectFixturesTab projectId={projectId} />}
       {tab === 'options'   && <ProjectOptionsPanel projectId={projectId} />}
@@ -1517,6 +1852,12 @@ export default function ProjectDetailPage() {
           onSaved={() => qc.invalidateQueries({ queryKey: ['project-detail', projectId] })}
         />
       )}
+
+      <CreateTicketDialog
+        open={createTicketOpen}
+        onClose={() => setCreateTicketOpen(false)}
+        prefill={{ projectId }}
+      />
     </div>
   )
 }

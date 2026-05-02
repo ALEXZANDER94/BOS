@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { QbDocument } from './projects'
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,14 @@ export interface Client {
   contactCount:   number
   projectCount:   number
   activityCount:  number
+  showContacts:   boolean
+  showProjects:   boolean
+  showProposals:  boolean
+  showLibraries:  boolean
+  showActivity:   boolean
+  showOptions:    boolean
+  qbCustomerId:   string | null
+  qbCustomerName: string | null
 }
 
 // ── Request types ─────────────────────────────────────────────────────────────
@@ -76,7 +85,14 @@ export interface CreateClientRequest {
   zip:         string
 }
 
-export type UpdateClientRequest = CreateClientRequest
+export interface UpdateClientRequest extends CreateClientRequest {
+  showContacts:  boolean
+  showProjects:  boolean
+  showProposals: boolean
+  showLibraries: boolean
+  showActivity:  boolean
+  showOptions:   boolean
+}
 
 export interface CreateContactRequest {
   name:      string
@@ -129,6 +145,9 @@ export const clientApi = {
 
   delete: (id: number) =>
     axios.delete(`${BASE}/${id}`),
+
+  setQbCustomer: (id: number, qbCustomerId: string | null, qbCustomerName: string | null) =>
+    axios.patch<Client>(`${BASE}/${id}/qb-customer`, { qbCustomerId, qbCustomerName }).then(r => r.data),
 }
 
 export const contactApi = {
@@ -173,6 +192,18 @@ export const allProjectsApi = {
     if (clientId) params.clientId = String(clientId)
     return axios.get<ProjectWithClient[]>('/api/project', { params }).then(r => r.data)
   },
+}
+
+// ── Client-scoped QuickBooks Estimates & Invoices ────────────────────────────
+
+export interface ClientQbDocumentsResponse {
+  estimates: QbDocument[]
+  invoices:  QbDocument[]
+}
+
+export const clientQbDocumentsApi = {
+  getAll: (clientId: number) =>
+    axios.get<ClientQbDocumentsResponse>(`${BASE}/${clientId}/qb-documents`).then(r => r.data),
 }
 
 export const activityApi = {

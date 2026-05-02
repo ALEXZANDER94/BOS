@@ -1,8 +1,9 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import AppShell from '@/components/layout/AppShell'
 import LoginPage from '@/pages/LoginPage'
+import DashboardPage from '@/pages/DashboardPage'
 import SuppliersPage from '@/pages/SuppliersPage'
 import GlossaryPage from '@/pages/GlossaryPage'
 import ComparisonPage from '@/pages/ComparisonPage'
@@ -11,11 +12,17 @@ import ClientsPage from '@/pages/ClientsPage'
 import ClientDetailPage from '@/pages/ClientDetailPage'
 import ProjectsPage from '@/pages/ProjectsPage'
 import ProjectDetailPage from '@/pages/ProjectDetailPage'
+import ProposalDetailPage from '@/pages/ProposalDetailPage'
+import ProposalsPage from '@/pages/ProposalsPage'
 import EmailsPage from '@/pages/EmailsPage'
+import TicketsPage from '@/pages/TicketsPage'
+import TicketDetailPage from '@/pages/TicketDetailPage'
+import ToolsPage from '@/pages/ToolsPage'
 
 interface User {
-  name: string
-  email: string
+  name:    string
+  email:   string
+  isAdmin: boolean
 }
 
 export default function App() {
@@ -45,17 +52,21 @@ export default function App() {
   return (
     <AppShell user={user}>
       <Routes>
-        {/* Default route redirects to suppliers */}
-        <Route path="/" element={<Navigate to="/suppliers" replace />} />
-        <Route path="/suppliers"  element={<SuppliersPage />} />
-        <Route path="/glossary"   element={<GlossaryPage />} />
-        <Route path="/comparison" element={<ComparisonPage />} />
+        <Route path="/"            element={<DashboardPage />} />
+        <Route path="/suppliers"   element={<SuppliersPage />} />
+        <Route path="/glossary"    element={<GlossaryPage />} />
+        <Route path="/comparison"  element={<ComparisonPage />} />
         <Route path="/clients"     element={<ClientsPage />} />
         <Route path="/clients/:id" element={<ClientDetailPage />} />
+        <Route path="/clients/:id/proposals/:proposalId" element={<ProposalDetailPage />} />
+        <Route path="/proposals"    element={<ProposalsPage />} />
         <Route path="/projects"     element={<ProjectsPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
-        <Route path="/emails"      element={<EmailsPage />} />
-        <Route path="/settings"    element={<SettingsPage />} />
+        <Route path="/emails"       element={<EmailsPage />} />
+        <Route path="/tickets"      element={<TicketsPage />} />
+        <Route path="/tickets/:id"  element={<TicketDetailPage />} />
+        <Route path="/tools"        element={<ToolsPage />} />
+        <Route path="/settings"     element={<SettingsPage />} />
       </Routes>
     </AppShell>
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Search, Upload } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -43,11 +43,31 @@ function fmtDate(iso: string | null) {
 
 type StatusFilter = '' | 'Active' | 'Completed' | 'On Hold' | 'Cancelled'
 
+// localStorage key for the persisted client filter on the Projects list view.
+// Stored as a string id (or empty string for "no filter") so it survives reloads
+// and lets users return to the same filtered view across navigations.
+const CLIENT_FILTER_STORAGE_KEY = 'projectsPage:clientFilter'
+
 export default function ProjectsPage() {
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
-  const [clientFilter, setClientFilter] = useState<number | undefined>(undefined)
+  const [clientFilter, setClientFilter] = useState<number | undefined>(() => {
+    if (typeof window === 'undefined') return undefined
+    const stored = localStorage.getItem(CLIENT_FILTER_STORAGE_KEY)
+    if (!stored) return undefined
+    const n = Number(stored)
+    return Number.isFinite(n) && n > 0 ? n : undefined
+  })
   const [importOpen, setImportOpen]     = useState(false)
+
+  // Persist the client filter whenever it changes.
+  useEffect(() => {
+    if (clientFilter) {
+      localStorage.setItem(CLIENT_FILTER_STORAGE_KEY, String(clientFilter))
+    } else {
+      localStorage.removeItem(CLIENT_FILTER_STORAGE_KEY)
+    }
+  }, [clientFilter])
 
   const hasFilter = !!clientFilter || !!search
 

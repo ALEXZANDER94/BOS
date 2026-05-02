@@ -13,6 +13,14 @@ export const clientSchema = z.object({
   city:        z.string().default(''),
   state:       z.string().default(''),
   zip:         z.string().default(''),
+  // Tab visibility on the Client Detail page (per-client). Default to all-on
+  // so newly created clients show every tab until the user hides some.
+  showContacts:  z.boolean().default(true),
+  showProjects:  z.boolean().default(true),
+  showProposals: z.boolean().default(true),
+  showLibraries: z.boolean().default(true),
+  showActivity:  z.boolean().default(true),
+  showOptions:   z.boolean().default(true),
 })
 
 export type ClientFormValues = z.infer<typeof clientSchema>
